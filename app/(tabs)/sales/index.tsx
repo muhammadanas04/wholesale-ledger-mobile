@@ -56,6 +56,11 @@ function SaleRow({ sale }: { sale: Sale }) {
   );
 }
 
+// Stably defined renderItem outside component body to avoid recreating on each render
+const renderItem = ({ item }: { item: Sale }) => {
+  return <SaleRow sale={item} />;
+};
+
 export default function SalesListScreen() {
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,9 +107,6 @@ export default function SalesListScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: Sale }) => {
-    return <SaleRow sale={item} />;
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">

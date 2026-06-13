@@ -94,7 +94,7 @@ export default appSchema({
     tableSchema({
       name: 'drivers',
       columns: [
-        { name: 'phone', type: 'string' },
+        { name: 'phone', type: 'string', isIndexed: true },
         { name: 'name', type: 'string', isOptional: true },
         { name: 'otp', type: 'string', isOptional: true },
         { name: 'otp_used', type: 'number' }, // 0 = false, 1 = true

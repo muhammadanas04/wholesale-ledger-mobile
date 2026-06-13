@@ -20,6 +20,45 @@ import { useQuery } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
 
+const getBalanceStyle = (balance: number) => {
+  if (balance > 0) return 'text-rose-600 dark:text-rose-400 font-semibold';
+  if (balance === 0) return 'text-emerald-600 dark:text-emerald-400 font-semibold';
+  return 'text-amber-600 dark:text-amber-400 font-semibold';
+};
+
+// Extracted Row Item component to allow FlashList optimal recycling
+function CustomerRow({ item }: { item: Customer }) {
+  return (
+    <Link href={`/customers/${item.id}`} asChild>
+      <Pressable className="flex-row justify-between items-center bg-white dark:bg-slate-800 px-5 py-4 border-b border-slate-100 dark:border-slate-800/40 active:bg-slate-50 dark:active:bg-slate-700/30">
+        <View className="flex-1 pr-4">
+          <Text className="text-base font-bold text-slate-900 dark:text-slate-50" numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.phone ? (
+            <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 font-mono">
+              {item.phone}
+            </Text>
+          ) : null}
+        </View>
+        <View className="items-end">
+          <Text className={`text-base font-mono ${getBalanceStyle(item.balance)}`}>
+            {formatCurrency(item.balance)}
+          </Text>
+          <Text className="text-slate-300 dark:text-slate-600 text-[10px] uppercase font-bold mt-0.5">
+            {item.synced === 1 ? 'Synced' : 'Pending'}
+          </Text>
+        </View>
+      </Pressable>
+    </Link>
+  );
+}
+
+// Stably defined renderItem outside component body to avoid recreating on each render
+const renderItem = ({ item }: { item: Customer }) => {
+  return <CustomerRow item={item} />;
+};
+
 export default function CustomerListScreen() {
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,39 +108,6 @@ export default function CustomerListScreen() {
     } finally {
       setRefreshing(false);
     }
-  };
-
-  const getBalanceStyle = (balance: number) => {
-    if (balance > 0) return 'text-rose-600 dark:text-rose-400 font-semibold';
-    if (balance === 0) return 'text-emerald-600 dark:text-emerald-400 font-semibold';
-    return 'text-amber-600 dark:text-amber-400 font-semibold';
-  };
-
-  const renderItem = ({ item }: { item: Customer }) => {
-    return (
-      <Link href={`/customers/${item.id}`} asChild>
-        <Pressable className="flex-row justify-between items-center bg-white dark:bg-slate-800 px-5 py-4 border-b border-slate-100 dark:border-slate-800/40 active:bg-slate-50 dark:active:bg-slate-700/30">
-          <View className="flex-1 pr-4">
-            <Text className="text-base font-bold text-slate-900 dark:text-slate-50" numberOfLines={1}>
-              {item.name}
-            </Text>
-            {item.phone ? (
-              <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 font-mono">
-                {item.phone}
-              </Text>
-            ) : null}
-          </View>
-          <View className="items-end">
-            <Text className={`text-base font-mono ${getBalanceStyle(item.balance)}`}>
-              {formatCurrency(item.balance)}
-            </Text>
-            <Text className="text-slate-300 dark:text-slate-600 text-[10px] uppercase font-bold mt-0.5">
-              {item.synced === 1 ? 'Synced' : 'Pending'}
-            </Text>
-          </View>
-        </Pressable>
-      </Link>
-    );
   };
 
   return (

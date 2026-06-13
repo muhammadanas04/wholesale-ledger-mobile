@@ -62,6 +62,11 @@ function PaymentRow({ payment }: { payment: Payment }) {
   );
 }
 
+// Stably defined renderItem outside component body to avoid recreating on each render
+const renderItem = ({ item }: { item: Payment }) => {
+  return <PaymentRow payment={item} />;
+};
+
 export default function PaymentsListScreen() {
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,9 +113,6 @@ export default function PaymentsListScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: Payment }) => {
-    return <PaymentRow payment={item} />;
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">

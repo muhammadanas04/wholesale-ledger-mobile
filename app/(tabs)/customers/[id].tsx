@@ -94,37 +94,67 @@ export default function CustomerDetailScreen() {
     return () => subscription.unsubscribe();
   }, [id]);
 
-  // Dummy query fallback for null configurations
-  const dummyQuery = useMemo(() => {
+  // Dummy query fallbacks for null configurations (Issue 19)
+  const dummySalesQuery = useMemo(() => {
     return database.collections.get<Sale>('sales').query(Q.where('id', ''));
+  }, []);
+
+  const dummyPaymentsQuery = useMemo(() => {
+    return database.collections.get<Payment>('payments').query(Q.where('id', ''));
   }, []);
 
   // 2. Reactive subscription to Customer Sales
   const salesQuery = useMemo(() => {
-    if (!customer) return dummyQuery;
+    if (!customer) return dummySalesQuery;
     return customer.sales.extend(Q.sortBy('date', Q.desc));
-  }, [customer, dummyQuery]);
+  }, [customer, dummySalesQuery]);
 
   const sales = useQuery(salesQuery);
 
   // 3. Reactive subscription to Customer Payments
   const paymentsQuery = useMemo(() => {
-    if (!customer) return database.collections.get<Payment>('payments').query(Q.where('id', ''));
+    if (!customer) return dummyPaymentsQuery;
     return customer.payments.extend(Q.sortBy('date', Q.desc));
-  }, [customer]);
+  }, [customer, dummyPaymentsQuery]);
 
   const payments = useQuery(paymentsQuery);
 
-  // 4. Ledger Bill Text Generation
+  // 4. Sum transactions reactively to build dynamic stats (Issue 17)
+  const totalSalesPaise = useMemo(() => {
+    return sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+  }, [sales]);
+
+  const totalPaidPaise = useMemo(() => {
+    return payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  }, [payments]);
+
+  const totalDiscountsPaise = useMemo(() => {
+    return payments.reduce((sum, p) => sum + (p.discount || 0), 0);
+  }, [payments]);
+
+  const formattedDate = useMemo(() => {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }, []);
+
+  // 5. Ledger Bill Text Generation (Issue 17)
   const billText = useMemo(() => {
     if (!customer) return '';
-    const dateStr = new Date().toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-    return `*Wholesale Ledger Balance Summary*\n\nCustomer: ${customer.name}\nPhone: ${customer.phone || 'N/A'}\nOutstanding Balance: ${formatCurrency(customer.balance)}\nAs of: ${dateStr}\n\nPlease clear the outstanding dues. Thank you for your business!`;
-  }, [customer]);
+    return `Wholesale Ledger
+Date: ${formattedDate}
+
+Customer: ${customer.name}
+Phone: ${customer.phone || 'N/A'}
+
+Total Sales:     ${formatCurrency(totalSalesPaise)}
+Total Paid:      ${formatCurrency(totalPaidPaise)}
+Total Discount:  ${formatCurrency(totalDiscountsPaise)}
+──────────────────────
+Balance Due:     ${formatCurrency(customer.balance)}`;
+  }, [customer, formattedDate, totalSalesPaise, totalPaidPaise, totalDiscountsPaise]);
 
   if (loading) {
     return (
@@ -154,6 +184,49 @@ export default function CustomerDetailScreen() {
   const handleSMS = () => {
     if (customer.phone) {
       Linking.openURL(`sms:${customer.phone}`);
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!customer.phone) {
+      Toast.show({
+        type: 'error',
+        text1: 'SMS Error',
+        text2: 'No phone number saved for this customer.',
+      });
+      return;
+    }
+
+    const cleanPhone = customer.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      Toast.show({
+        type: 'error',
+        text1: 'SMS Error',
+        text2: 'Invalid phone number format.',
+      });
+      return;
+    }
+
+    const url = `sms:${cleanPhone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(billText)}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(`sms:${cleanPhone}`);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'SMS Not Supported',
+          text2: 'SMS is not available on this device. Copy the bill and send manually.',
+        });
+      }
+    } catch (e) {
+      console.error('Failed to open SMS link:', e);
+      Toast.show({
+        type: 'error',
+        text1: 'SMS Failed',
+        text2: 'Could not open SMS application.',
+      });
     }
   };
 
@@ -417,7 +490,7 @@ export default function CustomerDetailScreen() {
                 </Text>
               </View>
 
-              <View className="flex-row">
+              <View className="flex-row justify-between">
                 <TouchableOpacity
                   onPress={handleCopyBill}
                   className="flex-1 flex-row items-center justify-center bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700/80 py-3.5 rounded-xl mr-2 active:scale-95"
@@ -425,24 +498,38 @@ export default function CustomerDetailScreen() {
                   <SymbolView
                     name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
                     tintColor="#4F46E5"
-                    size={16}
+                    size={14}
                   />
-                  <Text className="font-semibold text-sm text-slate-700 dark:text-slate-300 ml-2">
-                    Copy Text
+                  <Text className="font-semibold text-xs text-slate-700 dark:text-slate-300 ml-1.5">
+                    Copy
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleSendSMS}
+                  className="flex-1 flex-row items-center justify-center bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700/80 py-3.5 rounded-xl mx-1 active:scale-95"
+                >
+                  <SymbolView
+                    name={{ ios: 'message.fill', android: 'sms', web: 'sms' }}
+                    tintColor="#4F46E5"
+                    size={14}
+                  />
+                  <Text className="font-semibold text-xs text-slate-700 dark:text-slate-300 ml-1.5">
+                    Send SMS
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={handleShareBill}
-                  className="flex-2 flex-row items-center justify-center bg-indigo-600 dark:bg-indigo-500 py-3.5 rounded-xl ml-2 active:scale-95 shadow-sm shadow-indigo-600/10"
+                  className="flex-1 flex-row items-center justify-center bg-indigo-600 dark:bg-indigo-500 py-3.5 rounded-xl ml-2 active:scale-95 shadow-sm shadow-indigo-600/10"
                 >
                   <SymbolView
                     name={{ ios: 'square.and.arrow.up.fill', android: 'share', web: 'share' }}
                     tintColor="#FFFFFF"
-                    size={16}
+                    size={14}
                   />
-                  <Text className="font-bold text-sm text-white ml-2 px-3">
-                    Share Bill
+                  <Text className="font-bold text-xs text-white ml-1.5">
+                    Share
                   </Text>
                 </TouchableOpacity>
               </View>

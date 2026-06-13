@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: MILESTONE 5 COMPLETE (All Issues 1-15 Closed)
+## Status: ALL ISSUES 1-20 CLOSED (Milestones 1-7 Audit Clear)
 
 ---
 
@@ -145,8 +145,45 @@ After every AI coding session, paste a summary of what was built, what changed, 
 **Current working state:**
 - The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
 
+### Session 9 — June 13, 2026
+**What we built:**
+- **Dynamic Ledger Bill Calculation (`app/(tabs)/customers/[id].tsx`):** Implemented reactive computation of total sales (`SUM(sales.totalAmount)`) and total payments (`SUM(payments.amount)`) for the current customer using WatermelonDB query observables.
+- **Structured Bill Preview Text:** Structured the formatted bill text incorporating business branding, dynamic transaction totals, outstanding customer balance, and locale date configuration.
+- **Direct SMS Integration:** Programmed a "Send SMS" handler using `Linking.openURL` with platform-specific body delimiters, target phone sanitization, and graceful degradation checks.
+- **Refined Share Bill UI Layout:** Designed a three-button actions console (Copy, Send SMS, and Share) matching standard tab aesthetics.
+
+**What changed:**
+- Renamed payments query variable in list view (Issue 16).
+- Marked Milestone 6 tasks as complete.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
+
+### Session 10 — June 13, 2026
+**What we built:**
+- **Driver Management Screen (`app/(tabs)/delivery/drivers.tsx`):** Implemented a complete management layout displaying a list of registered delivery drivers with names, phones, status badges, and action buttons.
+- **Add Driver Modal:** Designed a bottom sheet registration interface verifying 10-digit numerical phone inputs and executing uniqueness checks against existing records in the SQLite database.
+- **OTP Generation & Single-View Alert:** Set up random 6-digit OTP generation on registration. Created a custom confirmation modal highlighting the OTP code with large fonts, a clipboard copy action, and a warning that it will not be displayed again.
+- **Atomic State Toggles:** Added a custom status action button allowing admins to activate or deactivate accounts with immediate atomic DB updates and background synchronization triggers.
+
+**What changed:**
+- Marked Milestone 7 tasks as complete.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
+
+### Session 11 — June 13, 2026
+**What we built / fixed:**
+- **Resolved Ledger Bill Mathematical Mismatch (Issue 17):** Added a `Total Discount` line to the customer statement template and computed the totals dynamically to keep the arithmetic consistent.
+- **Optimized FlashList Scrolling (Issue 18):** Refactored customer, payment, sales, and driver index lists to move row layout renderers and item styles outside of the functional component bodies (using module scope and memoized hooks).
+- **Stabilized Fallback Query Instances (Issue 19):** Created static dummy query fallbacks memoized with `useMemo` in `customers/[id].tsx` to prevent query instantiation on every render.
+- **Added Driver Phone Index (Issue 20):** Appended `isIndexed: true` on the `phone` column in the drivers table inside `db/schema.ts` to prevent slow table lookups during registration uniqueness scans.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
+
 **Next session starts at:**
-- **Milestone 6** → Bill generation (creating the text bill template, SMS redirects, and clipboard copy function).
+- **Milestone 8** → Delivery: Tasks (creating tasks, assigning deliveries to drivers, status views).
 
 ---
 
@@ -169,6 +206,12 @@ After every AI coding session, paste a summary of what was built, what changed, 
 | 14 | **Invoice Rounding Mismatch (1-paisa Bug)**: In `sales/new.tsx`, the invoice total is rounded in float, while item totals are rounded individually, potentially causing a 1-paisa mismatch between the invoice header and item sums. | Closed |
 | 15 | **Lack of Sale Date Format Validation**: In `sales/new.tsx`, `saleDate` YYYY-MM-DD input is a free text input without format validation, allowing malformed dates to corrupt queries. | Closed |
 | 16 | **Payments List Query Variable Naming Mismatch**: In `payments/index.tsx`, the variable storing the queried payments array is named `sales` instead of `payments`. (Style-only discrepancy) | Closed |
+| 17 | **Ledger Bill Mathematical Mismatch**: If a customer has payment discounts, they are subtracted from the outstanding balance but not listed in the ledger text preview, making the arithmetic shown mathematically inconsistent (`Sales - Paid != Balance Due`). | Closed |
+| 18 | **List rendering performance bottleneck**: All four tab index lists (`customers`, `payments`, `sales`, `delivery/drivers`) define their `renderItem` methods inside the functional component body on every render, bypassing FlashList rendering optimizations and degrading scroll performance. | Closed |
+| 19 | **Unstable Payments query observable fallback**: In `[id].tsx`, a new payments query instance is created on every render when the customer is null because it is returned inline. | Closed |
+| 20 | **Missing Database Index on Driver Phone**: In `db/schema.ts`, the `phone` column on `drivers` is queried for uniqueness on driver creation but does not have `isIndexed: true`, resulting in slow table scans. | Closed |
+---
+
 ---
 
 ## Decisions Made
