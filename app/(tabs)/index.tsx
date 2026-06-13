@@ -1,31 +1,16 @@
-import { StyleSheet } from 'react-native';
+import { Text, View } from 'react-native';
 
-import EditScreenInfo from '@/components/EditScreenInfo';
-import { Text, View } from '@/components/Themed';
-
-export default function TabOneScreen() {
+export default function DashboardScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Tab One</Text>
-      <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
-      <EditScreenInfo path="app/(tabs)/index.tsx" />
+    <View className="flex-1 items-center justify-center bg-slate-50 dark:bg-slate-900 px-6">
+      <Text className="text-2xl font-bold text-slate-900 dark:text-slate-50">Dashboard</Text>
+      <View className="h-[2px] w-1/3 bg-indigo-600 dark:bg-indigo-400 my-4 rounded-full" />
+      <Text className="text-slate-500 dark:text-slate-400 text-center">
+        Welcome to Wholesale Ledger Admin.
+      </Text>
+      <Text className="text-slate-400 dark:text-slate-500 text-xs text-center mt-1">
+        Milestone 1 completed. Project scaffolded successfully!
+      </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: '80%',
-  },
-});

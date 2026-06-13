@@ -1,8 +1,11 @@
+import '../global.css';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Toast from 'react-native-toast-message';
 
 import { useColorScheme } from '@/components/useColorScheme';
 
@@ -44,13 +47,28 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: 2,
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
+  );
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ presentation: 'modal', title: 'Settings' }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        </Stack>
+      </ThemeProvider>
+      <Toast />
+    </QueryClientProvider>
   );
 }
