@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: ALL ISSUES 1-20 CLOSED (Milestones 1-7 Audit Clear)
+## Status: MILESTONE 8 COMPLETE (All Issues 1-20 Closed)
 
 ---
 
@@ -182,8 +182,20 @@ After every AI coding session, paste a summary of what was built, what changed, 
 **Current working state:**
 - The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
 
+### Session 12 — June 13, 2026
+**What we built:**
+- **Delivery Dashboard (`app/(tabs)/delivery/index.tsx`):** Designed delivery lists sorted by status tabs (Pending, In Progress, Completed) utilizing `@shopify/flash-list` for performance, displaying joined driver name, stops counts, note summary, and time stamps.
+- **Create Delivery Screen (`app/(tabs)/delivery/new-delivery.tsx`):** Constructed a stops route creator with input fields for address, stock description, and customer selector modal link. Validates driver presence, stop requirements, and writes atomically to `deliveries` and `delivery_items` tables.
+- **Delivery Progress Monitor (`app/(tabs)/delivery/[id].tsx`):** Developed a read-only progress details checklist showing driver information, note instructions, stops checklist, customer details, and dynamic status bars representing driver updates.
+
+**What changed:**
+- Marked Milestone 8 tasks as complete.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
+
 **Next session starts at:**
-- **Milestone 8** → Delivery: Tasks (creating tasks, assigning deliveries to drivers, status views).
+- **Milestone 9** → Delivery: Live Map (driver location polling, map view, accessing coordinates).
 
 ---
 
