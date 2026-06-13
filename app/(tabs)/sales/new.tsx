@@ -99,14 +99,18 @@ export default function NewSaleScreen() {
 
   const products = useQuery(productsQuery);
 
-  // Live calculation of invoice total (in Rupees)
-  const invoiceTotal = useMemo(() => {
-    return lineItems.reduce((sum, item) => {
+  // Live calculation of line item totals in paise to prevent float rounding errors
+  const lineItemPaiseTotals = useMemo(() => {
+    return lineItems.map((item) => {
       const qty = parseFloat(item.qtyStr) || 0;
       const price = parseFloat(item.priceStr) || 0;
-      return sum + qty * price;
-    }, 0);
+      return Math.round(qty * price * 100);
+    });
   }, [lineItems]);
+
+  const invoiceTotalPaise = useMemo(() => {
+    return lineItemPaiseTotals.reduce((sum, val) => sum + val, 0);
+  }, [lineItemPaiseTotals]);
 
   const handleAddLineItem = (product: Product) => {
     // Add product to state with default blank strings to allow clean keyboard entry
@@ -138,6 +142,32 @@ export default function NewSaleScreen() {
         type: 'error',
         text1: 'Validation Error',
         text2: 'Please select a customer first.',
+      });
+      return;
+    }
+
+    // Validate Date format & calendar validity (Issue 15)
+    const cleanDate = saleDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Date must be in YYYY-MM-DD format.',
+      });
+      return;
+    }
+
+    const [year, month, day] = cleanDate.split('-').map(Number);
+    const parsedDate = new Date(year, month - 1, day);
+    if (
+      parsedDate.getFullYear() !== year ||
+      parsedDate.getMonth() !== month - 1 ||
+      parsedDate.getDate() !== day
+    ) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Please enter a valid calendar date.',
       });
       return;
     }
@@ -179,17 +209,16 @@ export default function NewSaleScreen() {
     setSaving(true);
     try {
       const saleId = Crypto.randomUUID();
-      const totalAmountPaise = Math.round(invoiceTotal * 100);
       const timestamp = new Date().toISOString();
 
       // Write atomically in a single transaction block
       await database.write(async () => {
-        // 1. Create Sale Header
+        // 1. Create Sale Header (using correct integer paise sum - Issue 14)
         await database.collections.get<Sale>('sales').create((sale) => {
           sale._raw.id = saleId;
           sale.customerId = selectedCustomer.id;
-          sale.date = saleDate;
-          sale.totalAmount = totalAmountPaise;
+          sale.date = cleanDate;
+          sale.totalAmount = invoiceTotalPaise;
           sale.discount = 0;
           sale.notes = notes.trim() || undefined;
           sale.createdAt = timestamp;
@@ -198,10 +227,12 @@ export default function NewSaleScreen() {
         });
 
         // 2. Create Sale Items
-        for (const item of lineItems) {
+        for (let i = 0; i < lineItems.length; i++) {
+          const item = lineItems[i];
           const qty = parseFloat(item.qtyStr);
           const priceRupees = parseFloat(item.priceStr);
           const weight = parseFloat(item.weightStr) || undefined;
+          const itemTotalPaise = lineItemPaiseTotals[i]; // using rounded paise (Issue 14)
 
           await database.collections.get<SaleItem>('sale_items').create((saleItem) => {
             saleItem._raw.id = Crypto.randomUUID();
@@ -210,16 +241,16 @@ export default function NewSaleScreen() {
             saleItem.qty = qty;
             saleItem.unitPrice = Math.round(priceRupees * 100);
             saleItem.weight = weight;
-            saleItem.totalPrice = Math.round(qty * priceRupees * 100);
+            saleItem.totalPrice = itemTotalPaise;
             saleItem.createdAt = timestamp;
             saleItem.updatedAt = timestamp;
             saleItem.synced = 0;
           });
         }
 
-        // 3. Update Customer Balance
+        // 3. Update Customer Balance (using correct integer paise sum - Issue 14)
         await selectedCustomer.update((cust) => {
-          cust.balance += totalAmountPaise;
+          cust.balance += invoiceTotalPaise;
           cust.updatedAt = timestamp;
           cust.synced = 0; // Mark customer unsynced to push updated balance
         });
@@ -228,7 +259,7 @@ export default function NewSaleScreen() {
       Toast.show({
         type: 'success',
         text1: 'Sale Saved',
-        text2: `Invoice of ${formatCurrency(totalAmountPaise)} saved successfully.`,
+        text2: `Invoice of ${formatCurrency(invoiceTotalPaise)} saved successfully.`,
       });
 
       // Trigger background sync push
@@ -354,8 +385,8 @@ export default function NewSaleScreen() {
             </View>
           ) : (
             <View className="border-t border-slate-100 dark:border-slate-800/30 pt-4">
-              {lineItems.map((item) => {
-                const subTotal = (parseFloat(item.qtyStr) || 0) * (parseFloat(item.priceStr) || 0);
+              {lineItems.map((item, index) => {
+                const subTotalPaise = lineItemPaiseTotals[index];
 
                 return (
                   <View
@@ -429,7 +460,7 @@ export default function NewSaleScreen() {
                       <View className="flex-2 items-end justify-center ml-2">
                         <Text className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase mb-1">Subtotal</Text>
                         <Text className="text-sm font-mono font-bold text-slate-800 dark:text-slate-200 mt-2">
-                          {formatCurrency(Math.round(subTotal * 100))}
+                          {formatCurrency(subTotalPaise)}
                         </Text>
                       </View>
                     </View>
@@ -467,7 +498,7 @@ export default function NewSaleScreen() {
             Total Amount
           </Text>
           <Text className="text-xl font-mono font-bold text-slate-800 dark:text-slate-50">
-            {formatCurrency(Math.round(invoiceTotal * 100))}
+            {formatCurrency(invoiceTotalPaise)}
           </Text>
         </View>
 

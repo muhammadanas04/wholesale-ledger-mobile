@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: MILESTONE 4 COMPLETE (Sales Module & All Issues Closed)
+## Status: MILESTONE 5 COMPLETE (All Issues 1-15 Closed)
 
 ---
 
@@ -123,6 +123,33 @@ After every AI coding session, paste a summary of what was built, what changed, 
 
 ---
 
+### Session 7 — June 13, 2026
+**What we built / fixed:**
+- **Resolved Rounding Mismatch 1-Paisa Bug (Issue 14):** Modified `app/(tabs)/sales/new.tsx` to calculate all line item totals in paise first, then compute the invoice total in paise directly as the sum of these rounded subtotals. Linked both list rows and the sticky bottom total display to this exact integer paise computation.
+- **Strict Date Input Validation (Issue 15):** Enforced a regular expression check on the YYYY-MM-DD input, and resolved calendar rollover checks (e.g. invalid calendar dates like Feb 30) using splits and `Date` instance comparison before database writes.
+
+**What changed:**
+- Re-ran TypeScript compiler checks to ensure clean builds across all files.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
+
+### Session 8 — June 13, 2026
+**What we built:**
+- **Record Payment Entry Form (`app/(tabs)/payments/new.tsx`):** Implemented a customer selector modal list, raw string decimal inputs, strict date format and calendar validation, and post-save background synchronization.
+- **Atomic Transaction Safety:** Wrapped payment creation and customer outstanding balance subtraction (`customer.balance -= (amount + discount)`) inside an offline-first transactional batch transaction.
+
+**What changed:**
+- Marked Milestone 5 tasks as complete.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
+
+**Next session starts at:**
+- **Milestone 6** → Bill generation (creating the text bill template, SMS redirects, and clipboard copy function).
+
+---
+
 ## Known Issues / Bugs
 | # | Description | Status |
 |---|---|---|
@@ -139,8 +166,9 @@ After every AI coding session, paste a summary of what was built, what changed, 
 | 11 | **React useEffect Cleanup Bug**: In `app/_layout.tsx`, `setupSyncTriggers` unsubscribe callback is returned inside an async `.then()` promise, causing event listener leaks. | Closed |
 | 12 | **Duplicated Connection Test & High Bandwidth Usage**: `app/settings.tsx` duplicates HTTP fetch logic, and both `settings.tsx` and `api.ts` query `since=1970` for testing (downloading entire database). | Closed |
 | 13 | **Push Concurrency Race Condition**: If a user edits a local record while a sync push is in-flight, those updates (which are not in the payload) are blindly marked as `synced = 1` and lost. | Closed |
-| 14 | **Invoice Rounding Mismatch (1-paisa Bug)**: In `sales/new.tsx`, the invoice total is rounded in float, while item totals are rounded individually, potentially causing a 1-paisa mismatch between the invoice header and item sums. | Open |
-| 15 | **Lack of Sale Date Format Validation**: In `sales/new.tsx`, `saleDate` YYYY-MM-DD input is a free text input without format validation, allowing malformed dates to corrupt queries. | Open |
+| 14 | **Invoice Rounding Mismatch (1-paisa Bug)**: In `sales/new.tsx`, the invoice total is rounded in float, while item totals are rounded individually, potentially causing a 1-paisa mismatch between the invoice header and item sums. | Closed |
+| 15 | **Lack of Sale Date Format Validation**: In `sales/new.tsx`, `saleDate` YYYY-MM-DD input is a free text input without format validation, allowing malformed dates to corrupt queries. | Closed |
+| 16 | **Payments List Query Variable Naming Mismatch**: In `payments/index.tsx`, the variable storing the queried payments array is named `sales` instead of `payments`. (Style-only discrepancy) | Closed |
 ---
 
 ## Decisions Made
