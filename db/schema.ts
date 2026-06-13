@@ -1,13 +1,17 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
+// NOTE ON TIMESTAMPS: We intentionally use type 'string' for 'created_at' and 'updated_at' 
+// to match the ISO 8601 date string formats used by the Cloudflare D1 and desktop SQLite databases.
+// This disables WatermelonDB's native automatic @date tracking (which requires numbers).
+// Consequently, CRUD and sync operations must manually update and parse these values as ISO strings.
 export default appSchema({
   version: 1,
   tables: [
     tableSchema({
       name: 'customers',
       columns: [
-        { name: 'name', type: 'string' },
-        { name: 'phone', type: 'string', isOptional: true },
+        { name: 'name', type: 'string', isIndexed: true },
+        { name: 'phone', type: 'string', isOptional: true, isIndexed: true },
         { name: 'address', type: 'string', isOptional: true },
         { name: 'balance', type: 'number' }, // in paise
         { name: 'created_at', type: 'string' }, // ISO 8601 string

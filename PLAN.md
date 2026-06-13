@@ -93,9 +93,9 @@ function decodeSyncKey(base64: string): { workerUrl: string; secret: string } {
 **pull():**
 1. Get `last_sync_time` from Zustand store (default: `1970-01-01T00:00:00Z` for first sync)
 2. Call `GET /pull?since=<last_sync_time>` with auth header
-3. For each record in response: upsert into WatermelonDB using `database.write(() => collection.upsert(...))`
+3. For each table in response, perform a batch upsert: check if record exists in local database by ID; branch using `prepareCreate` (new) or `prepareUpdate` (existing) on the record; and execute in a write block using `database.write(() => database.batch(...preparedRecords))`.
 4. Update `last_sync_time` in Zustand + AsyncStorage
-5. Also call `GET /pull/delivery?since=<last_sync_time>` → upsert drivers, deliveries, delivery_items
+5. Also call `GET /pull/delivery?since=<last_sync_time>` → batch upsert drivers, deliveries, and delivery_items in a similar manner.
 
 **push():**
 1. Query WatermelonDB for all rows where `synced = 0` across all tables

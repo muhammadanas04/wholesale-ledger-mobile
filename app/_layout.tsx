@@ -8,6 +8,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { database } from '../db';
+import { useAppStore } from '../store/app';
+import { runSync, setupSyncTriggers } from '../lib/sync';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -47,6 +50,7 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const initStore = useAppStore((state) => state.initStore);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -58,6 +62,25 @@ function RootLayoutNav() {
         },
       })
   );
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    let active = true;
+
+    initStore().then(() => {
+      if (!active) return;
+      unsubscribe = setupSyncTriggers(database);
+      // Run initial sync cycle in background on start
+      runSync(database).catch(() => {});
+    });
+
+    return () => {
+      active = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [initStore]);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "tmp-scaffold",
-    "slug": "tmp-scaffold",
+    "name": "Wholesale Ledger Admin",
+    "slug": "wholesale-ledger-admin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "tmpscaffold",
+    "scheme": "wholesaleledgeradmin",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
@@ -26,6 +26,7 @@
     },
     "plugins": [
       "expo-router",
+      "@morrowdigital/watermelondb-expo-plugin",
       [
         "expo-splash-screen",
         {
