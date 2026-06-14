@@ -70,6 +70,7 @@ function SaleItemsList({ sale }: { sale: Sale }) {
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [, setTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'sales' | 'payments' | 'bill'>('sales');
   const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
@@ -83,6 +84,7 @@ export default function CustomerDetailScreen() {
       .subscribe({
         next: (record) => {
           setCustomer(record);
+          setTick((t) => t + 1);
           setLoading(false);
         },
         error: (err) => {
@@ -132,6 +134,11 @@ export default function CustomerDetailScreen() {
     return payments.reduce((sum, p) => sum + (p.discount || 0), 0);
   }, [payments]);
 
+  const previousBalancePaise = useMemo(() => {
+    if (!customer) return 0;
+    return customer.balance - (totalSalesPaise - totalPaidPaise - totalDiscountsPaise);
+  }, [customer, totalSalesPaise, totalPaidPaise, totalDiscountsPaise]);
+
   const formattedDate = useMemo(() => {
     const today = new Date();
     const dd = String(today.getDate()).padStart(2, '0');
@@ -140,7 +147,7 @@ export default function CustomerDetailScreen() {
     return `${dd}/${mm}/${yyyy}`;
   }, []);
 
-  // 5. Ledger Bill Text Generation (Issue 17)
+  // 5. Ledger Bill Text Generation (Issue 17 & 27)
   const billText = useMemo(() => {
     if (!customer) return '';
     return `Wholesale Ledger
@@ -149,12 +156,13 @@ Date: ${formattedDate}
 Customer: ${customer.name}
 Phone: ${customer.phone || 'N/A'}
 
-Total Sales:     ${formatCurrency(totalSalesPaise)}
-Total Paid:      ${formatCurrency(totalPaidPaise)}
-Total Discount:  ${formatCurrency(totalDiscountsPaise)}
+Previous Balance: ${formatCurrency(previousBalancePaise)}
+Total Sales:      +${formatCurrency(totalSalesPaise)}
+Total Paid:       -${formatCurrency(totalPaidPaise)}
+Total Discount:   -${formatCurrency(totalDiscountsPaise)}
 ──────────────────────
-Balance Due:     ${formatCurrency(customer.balance)}`;
-  }, [customer, formattedDate, totalSalesPaise, totalPaidPaise, totalDiscountsPaise]);
+Balance Due:      ${formatCurrency(customer.balance)}`;
+  }, [customer, formattedDate, previousBalancePaise, totalSalesPaise, totalPaidPaise, totalDiscountsPaise]);
 
   if (loading) {
     return (

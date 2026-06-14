@@ -122,7 +122,7 @@ export default appSchema({
         { name: 'address', type: 'string' },
         { name: 'stock_amount', type: 'string' }, // Free text description of items
         { name: 'status', type: 'string' }, // pending, done
-        { name: 'customer_id', type: 'string', isOptional: true },
+        { name: 'customer_id', type: 'string', isOptional: true, isIndexed: true },
         { name: 'notes', type: 'string', isOptional: true },
         { name: 'created_at', type: 'string', isOptional: true },
         { name: 'updated_at', type: 'string', isOptional: true },

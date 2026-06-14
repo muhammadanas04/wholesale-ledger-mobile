@@ -89,6 +89,7 @@ function StopRowItem({ item, index }: { item: DeliveryItem; index: number }) {
 export default function DeliveryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [, setTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -101,6 +102,7 @@ export default function DeliveryDetailScreen() {
       .subscribe({
         next: (record) => {
           setDelivery(record);
+          setTick((t) => t + 1);
           setLoading(false);
         },
         error: (err) => {
@@ -112,7 +114,7 @@ export default function DeliveryDetailScreen() {
     return () => subscription.unsubscribe();
   }, [id]);
 
-  const driver = useRelation(delivery ? delivery.driver : (null as any)) as Driver | null;
+  const driver = useRelation(delivery ? delivery.driver : null) as Driver | null;
 
   // 2. Reactive subscription to stops list
   const stopsQuery = useMemo(() => {

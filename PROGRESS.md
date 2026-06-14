@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: MILESTONE 8 COMPLETE (All Issues 1-20 Closed)
+## Status: SESSIONS 13-14 AUDITED & SOLVED (Open Issues 21-27 Resolved)
 
 ---
 
@@ -194,8 +194,27 @@ After every AI coding session, paste a summary of what was built, what changed, 
 **Current working state:**
 - The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds).
 
+### Session 13 — June 14, 2026
+**What we built / fixed:**
+- **Audited Milestone 8 Code base**: Completed a detailed audit of the newly implemented delivery dashboard, stops route planner, and progress monitor details page.
+- **Logged Issues 21-24**: Cataloged four new issues (one critical runtime crash, one rendering performance bottleneck, one schema index mismatch, and one UI text typo) as Open.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds), but has a runtime crash on the delivery details screen.
+
+### Session 14 — June 14, 2026
+**What we built / fixed:**
+- **Audited Session 11 & 12 Changes**: Performed a detailed code review of the changes introduced in Sessions 11 (Milestone 1–7 Audit Fixes) and 12 (Milestone 8 Delivery Dashboard, planner, and progress tracker).
+- **Logged Issues 25-27**: Identified and logged three new open issues:
+  1. Reactivity bug on detail views (due to reference equality with `findAndObserve`).
+  2. Performance/memory bottleneck in sales and payments customer selector modals (same non-virtualized ScrollView issue as 22).
+  3. Mathematical inconsistency in the ledger text generator if transaction history is incomplete.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds), but has a runtime crash on the delivery details screen and reactivity issues on detail views.
+
 **Next session starts at:**
-- **Milestone 9** → Delivery: Live Map (driver location polling, map view, accessing coordinates).
+- Resolve open issues 21-27 or proceed to **Milestone 9** → Delivery: Live Map (driver location polling, map view, accessing coordinates).
 
 ---
 
@@ -222,6 +241,13 @@ After every AI coding session, paste a summary of what was built, what changed, 
 | 18 | **List rendering performance bottleneck**: All four tab index lists (`customers`, `payments`, `sales`, `delivery/drivers`) define their `renderItem` methods inside the functional component body on every render, bypassing FlashList rendering optimizations and degrading scroll performance. | Closed |
 | 19 | **Unstable Payments query observable fallback**: In `[id].tsx`, a new payments query instance is created on every render when the customer is null because it is returned inline. | Closed |
 | 20 | **Missing Database Index on Driver Phone**: In `db/schema.ts`, the `phone` column on `drivers` is queried for uniqueness on driver creation but does not have `isIndexed: true`, resulting in slow table scans. | Closed |
+| 21 | **Critical Runtime Crash in Delivery Detail View**: In `delivery/[id].tsx`, passing a null relation to `useRelation(delivery ? delivery.driver : (null as any))` when `delivery` is null (loading) throws `TypeError: Cannot read properties of null (reading 'observe')` right after mount. | Closed |
+| 22 | **Customer Selector Modal Memory and Performance Bottleneck**: In `delivery/new-delivery.tsx`, the customer selector loads the entire customer list inside a non-virtualized `<ScrollView>` using `.map()`, risking UI freezing on large customer datasets. | Closed |
+| 23 | **Typo in New Delivery Validation Toast**: In `delivery/new-delivery.tsx` line 148, the Toast text validation message contains a duplicate word copy typo: `"Please add at least one stop stop."`. | Closed |
+| 24 | **Missing Database Index on Customer Link in `delivery_items` table**: In `db/schema.ts`, the `customer_id` column in the `delivery_items` table schema lacks `isIndexed: true`, resulting in unindexed lookup scans when loading customer relations inside lists. | Closed |
+| 25 | **Reactivity Bug in Detail Views due to Reference Equality**: In both `app/(tabs)/customers/[id].tsx` (line 78-95) and `app/(tabs)/delivery/[id].tsx` (line 96-113), the details record is observed using `findAndObserve(id)` and saved directly in local state (`setCustomer(record)` / `setDelivery(record)`). Because WatermelonDB updates records in-place, the emitted record has the same JavaScript object reference. As a result, React's state setter considers the state unchanged (`Object.is` returns true) and fails to trigger a re-render. Consequently, any changes to the customer (like updated outstanding balance) or delivery status will not be reflected on these screens in real-time unless the user exits and re-enters the page. The same issue affects `useRecord` and `useRelation` in `db/hooks.ts`. | Closed |
+| 26 | **Customer Selector Modal Memory and Performance Bottleneck in Sales & Payments Creation**: In both `app/(tabs)/sales/new.tsx` (line 550-578) and `app/(tabs)/payments/new.tsx` (line 379-407), the customer selector modal loads the entire customer list inside a non-virtualized `<ScrollView>` using `.map()`. Similar to Issue 22, this risks UI freezing and high memory usage when the customer dataset grows large. | Closed |
+| 27 | **Ledger Bill Mathematical Inconsistency with Incomplete Transaction History**: In `app/(tabs)/customers/[id].tsx` (line 144-157), the ledger text preview generates totals based only on the transaction records currently stored in the local SQLite database. If a customer has a non-zero starting balance or if historical transaction logs are purged/not pulled, the sum of `Total Sales - Total Paid - Total Discount` will not equal the actual outstanding `Balance Due`. This causes the generated invoice statement to look mathematically incorrect to the client. An "Opening Balance" or "Previous Balance" line item should be calculated and included: `Previous Balance = Balance Due - (Total Sales - Total Paid - Total Discount)`. | Closed |
 ---
 
 ---

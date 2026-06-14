@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  FlatList,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -26,6 +27,23 @@ import SaleItem from '../../../db/models/SaleItem';
 import { useQuery } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
+
+const CustomerListItem = React.memo(({ item, onPress }: { item: Customer; onPress: (c: Customer) => void }) => (
+  <TouchableOpacity
+    onPress={() => onPress(item)}
+    className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
+  >
+    <View className="flex-1 pr-4">
+      <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}</Text>
+      {item.phone ? (
+        <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.phone}</Text>
+      ) : null}
+    </View>
+    <Text className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+      Bal: {formatCurrency(item.balance)}
+    </Text>
+  </TouchableOpacity>
+));
 
 interface LocalLineItem {
   id: string;
@@ -546,36 +564,26 @@ export default function NewSaleScreen() {
               />
             </View>
           </View>
-
-          <ScrollView className="flex-1">
-            {customers.length === 0 ? (
+          <FlatList
+            className="flex-1"
+            data={customers}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <CustomerListItem
+                item={item}
+                onPress={(c) => {
+                  setSelectedCustomer(c);
+                  setCustomerModalVisible(false);
+                  setCustomerSearch('');
+                }}
+              />
+            )}
+            ListEmptyComponent={
               <View className="py-20 items-center justify-center">
                 <Text className="text-slate-400 dark:text-slate-500 text-sm">No customers found.</Text>
               </View>
-            ) : (
-              customers.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  onPress={() => {
-                    setSelectedCustomer(c);
-                    setCustomerModalVisible(false);
-                    setCustomerSearch('');
-                  }}
-                  className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
-                >
-                  <View className="flex-1 pr-4">
-                    <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{c.name}</Text>
-                    {c.phone ? (
-                      <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{c.phone}</Text>
-                    ) : null}
-                  </View>
-                  <Text className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
-                    Bal: {formatCurrency(c.balance)}
-                  </Text>
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
       </Modal>
 

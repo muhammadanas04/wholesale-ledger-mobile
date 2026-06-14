@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -25,6 +26,36 @@ import DeliveryItem from '../../../db/models/DeliveryItem';
 import { useQuery } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
+
+const DriverListItem = React.memo(({ item, onPress }: { item: Driver; onPress: (d: Driver) => void }) => (
+  <TouchableOpacity
+    onPress={() => onPress(item)}
+    className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
+  >
+    <View className="flex-1 pr-4">
+      <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}</Text>
+      <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.phone}</Text>
+    </View>
+    <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor="#CBD5E1" size={16} />
+  </TouchableOpacity>
+));
+
+const CustomerListItem = React.memo(({ item, onPress }: { item: Customer; onPress: (c: Customer) => void }) => (
+  <TouchableOpacity
+    onPress={() => onPress(item)}
+    className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
+  >
+    <View className="flex-1 pr-4">
+      <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}</Text>
+      {item.phone ? (
+        <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.phone}</Text>
+      ) : null}
+    </View>
+    <Text className="text-xs font-mono font-bold text-slate-550 dark:text-slate-400">
+      Bal: {formatCurrency(item.balance)}
+    </Text>
+  </TouchableOpacity>
+));
 
 interface StopItem {
   id: string;
@@ -145,7 +176,7 @@ export default function NewDeliveryScreen() {
       Toast.show({
         type: 'error',
         text1: 'Validation Error',
-        text2: 'Please add at least one stop stop.',
+        text2: 'Please add at least one stop.',
       });
       return;
     }
@@ -481,31 +512,26 @@ export default function NewDeliveryScreen() {
             </View>
           </View>
 
-          <ScrollView className="flex-1">
-            {activeDrivers.length === 0 ? (
+          <FlatList
+            className="flex-1"
+            data={activeDrivers}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <DriverListItem
+                item={item}
+                onPress={(d) => {
+                  setSelectedDriver(d);
+                  setDriverModalVisible(false);
+                  setDriverSearch('');
+                }}
+              />
+            )}
+            ListEmptyComponent={
               <View className="py-20 items-center justify-center">
                 <Text className="text-slate-400 dark:text-slate-500 text-sm">No active drivers found.</Text>
               </View>
-            ) : (
-              activeDrivers.map((d) => (
-                <TouchableOpacity
-                  key={d.id}
-                  onPress={() => {
-                    setSelectedDriver(d);
-                    setDriverModalVisible(false);
-                    setDriverSearch('');
-                  }}
-                  className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
-                >
-                  <View className="flex-1 pr-4">
-                    <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{d.name}</Text>
-                    <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{d.phone}</Text>
-                  </View>
-                  <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor="#CBD5E1" size={16} />
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
       </Modal>
 
@@ -537,31 +563,22 @@ export default function NewDeliveryScreen() {
             </View>
           </View>
 
-          <ScrollView className="flex-1">
-            {customers.length === 0 ? (
+          <FlatList
+            className="flex-1"
+            data={customers}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <CustomerListItem
+                item={item}
+                onPress={handleLinkCustomer}
+              />
+            )}
+            ListEmptyComponent={
               <View className="py-20 items-center justify-center">
                 <Text className="text-slate-400 dark:text-slate-500 text-sm">No customers found.</Text>
               </View>
-            ) : (
-              customers.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  onPress={() => handleLinkCustomer(c)}
-                  className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
-                >
-                  <View className="flex-1 pr-4">
-                    <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{c.name}</Text>
-                    {c.phone ? (
-                      <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{c.phone}</Text>
-                    ) : null}
-                  </View>
-                  <Text className="text-xs font-mono font-bold text-slate-550 dark:text-slate-400">
-                    Bal: {formatCurrency(c.balance)}
-                  </Text>
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
       </Modal>
 
