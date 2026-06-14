@@ -11,6 +11,12 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.wholesaleledger.admin",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDummyApiKeyPlaceholder"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

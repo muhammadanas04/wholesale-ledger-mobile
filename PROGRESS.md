@@ -216,6 +216,18 @@ After every AI coding session, paste a summary of what was built, what changed, 
 **Next session starts at:**
 - Resolve open issues 21-27 or proceed to **Milestone 9** → Delivery: Live Map (driver location polling, map view, accessing coordinates).
 
+### Session 15 — June 14, 2026
+**What we built / fixed:**
+- **Resolved Open Issues 21-27**: Solved critical runtime crash on delivery detail view, customer selector scroll performance lags by virtualizing scroll view with FlatList in creation views (sales, payments, delivery stop creator), schema index column, state mutation update ticks in WatermelonDB hook observers, and corrected ledger math previews.
+- **Implemented Milestone 9 (Live Tracker Map)**: Implemented map tracker dashboard screen utilizing react-native-maps, location coordinates polling with React Query, automatic lifecycle hooks integration with expo-router navigation listener, custom stale markers (>15m offline), and bottom slider selection cards.
+- **Google Maps API Config**: Integrated Google Maps API config placeholder inside `app.json`.
+
+**Current working state:**
+- The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds) and is ready for native maps testing.
+
+**Next session starts at:**
+- **Milestone 10** → Polish & Edge Cases (Offline banner, empty lists layouts, and sync errors).
+
 ---
 
 ## Known Issues / Bugs
