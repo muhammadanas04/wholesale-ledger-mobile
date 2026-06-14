@@ -221,6 +221,7 @@ After every AI coding session, paste a summary of what was built, what changed, 
 - **Resolved Open Issues 21-27**: Solved critical runtime crash on delivery detail view, customer selector scroll performance lags by virtualizing scroll view with FlatList in creation views (sales, payments, delivery stop creator), schema index column, state mutation update ticks in WatermelonDB hook observers, and corrected ledger math previews.
 - **Implemented Milestone 9 (Live Tracker Map)**: Implemented map tracker dashboard screen utilizing react-native-maps, location coordinates polling with React Query, automatic lifecycle hooks integration with expo-router navigation listener, custom stale markers (>15m offline), and bottom slider selection cards.
 - **Google Maps API Config**: Integrated Google Maps API config placeholder inside `app.json`.
+- **Defensive Timestamp Polling**: Implemented safe, fallback-aware parsing of driver location timestamps in `map.tsx` to handle null or missing fields from the server gracefully.
 
 **Current working state:**
 - The project builds and compiles cleanly with **zero TypeScript errors** (`pnpm exec tsc --noEmit` succeeds) and is ready for native maps testing.

@@ -96,16 +96,19 @@ export default function LiveMapScreen() {
 
   const renderedMarkers = useMemo(() => {
     return activeLocations.map((loc: any) => {
-      const recordedAt = new Date(loc.recorded_at);
+      const recordedAt = loc.recorded_at ? new Date(loc.recorded_at) : new Date();
+      const isValidDate = !isNaN(recordedAt.getTime());
       const now = new Date();
-      const diffMs = now.getTime() - recordedAt.getTime();
+      const diffMs = isValidDate ? now.getTime() - recordedAt.getTime() : 0;
       const diffMins = Math.floor(diffMs / 60000);
-      const isStale = diffMins > 15;
+      const isStale = !isValidDate || diffMins > 15;
 
-      const recordedTime = recordedAt.toLocaleTimeString('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      const recordedTime = isValidDate
+        ? recordedAt.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'N/A';
 
       // Pin Color: Gray for stale/offline, Indigo for active
       const pinColor = isStale ? '#94A3B8' : '#4F46E5';
@@ -229,11 +232,12 @@ export default function LiveMapScreen() {
             className="flex-row"
           >
             {activeLocations.map((loc: any) => {
-              const recordedAt = new Date(loc.recorded_at);
+              const recordedAt = loc.recorded_at ? new Date(loc.recorded_at) : new Date();
+              const isValidDate = !isNaN(recordedAt.getTime());
               const now = new Date();
-              const diffMs = now.getTime() - recordedAt.getTime();
+              const diffMs = isValidDate ? now.getTime() - recordedAt.getTime() : 0;
               const diffMins = Math.floor(diffMs / 60000);
-              const isStale = diffMins > 15;
+              const isStale = !isValidDate || diffMins > 15;
 
               return (
                 <TouchableOpacity
