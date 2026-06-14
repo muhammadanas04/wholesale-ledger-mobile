@@ -158,12 +158,12 @@ export default function CustomerListScreen() {
               size={64}
             />
             <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg mt-4 text-center">
-              {searchQuery ? 'No Results Found' : 'No Customers Yet'}
+              {searchQuery ? 'No Results Found' : 'No customers yet.'}
             </Text>
             <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center max-w-[260px]">
               {searchQuery
                 ? `We couldn't find any customer matching "${searchQuery}".`
-                : 'Add customers using the plus button or configure your sync credentials in Settings.'}
+                : 'Tap + to add one.'}
             </Text>
           </View>
         }

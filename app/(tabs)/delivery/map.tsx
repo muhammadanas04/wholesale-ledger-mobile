@@ -12,6 +12,7 @@ import { useNavigation } from 'expo-router';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNetInfo } from '@react-native-community/netinfo';
 
 import { api } from '../../../lib/api';
 import { formatCurrency } from '../../../lib/utils';
@@ -21,6 +22,8 @@ export default function LiveMapScreen() {
   const [isFocused, setIsFocused] = useState(true);
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView | null>(null);
+  const netInfo = useNetInfo();
+  const isOffline = netInfo.isConnected === false;
 
   useEffect(() => {
     const unsubscribeFocus = navigation.addListener('focus', () => {
@@ -40,7 +43,7 @@ export default function LiveMapScreen() {
     queryKey: ['driver-locations'],
     queryFn: () => api.getDriverLocations(),
     refetchInterval: 30000, // poll every 30s
-    enabled: isFocused, // only poll when map screen is focused
+    enabled: isFocused && !isOffline, // only poll when map screen is focused and online
   });
 
   const activeLocations = useMemo(() => {
@@ -137,6 +140,24 @@ export default function LiveMapScreen() {
     });
   }, [activeLocations]);
 
+  if (isOffline) {
+    return (
+      <View className="flex-1 justify-center items-center bg-slate-50 dark:bg-slate-900 px-6">
+        <SymbolView
+          name={{ ios: 'wifi.slash', android: 'wifi_off', web: 'wifi_off' }}
+          tintColor="#EF4444"
+          size={48}
+        />
+        <Text className="text-base font-bold text-slate-800 dark:text-slate-100 mt-4 text-center">
+          Location data unavailable offline
+        </Text>
+        <Text className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-center max-w-[240px]">
+          Please reconnect to the internet to track driver locations in real time.
+        </Text>
+      </View>
+    );
+  }
+
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-slate-50 dark:bg-slate-900">
@@ -220,7 +241,7 @@ export default function LiveMapScreen() {
       </MapView>
 
       {/* Bottom Horizontal Drivers Carousel */}
-      {activeLocations.length > 0 && (
+      {activeLocations.length > 0 ? (
         <View
           style={{ bottom: insets.bottom + 20 }}
           className="absolute left-4 right-4 z-10"
@@ -272,6 +293,15 @@ export default function LiveMapScreen() {
               );
             })}
           </ScrollView>
+        </View>
+      ) : (
+        <View
+          style={{ bottom: insets.bottom + 20 }}
+          className="absolute left-4 right-4 z-10 bg-white/95 dark:bg-slate-800/95 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-md items-center justify-center backdrop-blur-md"
+        >
+          <Text className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            No drivers are currently active.
+          </Text>
         </View>
       )}
     </View>

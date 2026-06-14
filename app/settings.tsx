@@ -44,6 +44,7 @@ function encodeSyncKey(workerUrl: string, syncSecret: string): string {
 export default function SettingsScreen() {
   const { syncConfig, syncStatus, setSyncConfig } = useAppStore();
   const [syncKey, setSyncKey] = useState('');
+  const [errorText, setErrorText] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -60,18 +61,21 @@ export default function SettingsScreen() {
 
   const handleTestConnection = async () => {
     if (!syncKey.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Please enter a sync key first.',
-      });
+      setErrorText('Please enter a sync key first.');
+      return;
+    }
+
+    let creds;
+    try {
+      creds = decodeSyncKey(syncKey);
+    } catch (e: any) {
+      setErrorText(e.message || 'Invalid sync key format.');
       return;
     }
 
     setTesting(true);
     try {
-      const { workerUrl, syncSecret } = decodeSyncKey(syncKey);
-      await api.testConnection(workerUrl, syncSecret);
+      await api.testConnection(creds.workerUrl, creds.syncSecret);
 
       Toast.show({
         type: 'success',
@@ -82,7 +86,7 @@ export default function SettingsScreen() {
       Toast.show({
         type: 'error',
         text1: 'Connection Failed',
-        text2: e.message || 'Could not reach the sync worker.',
+        text2: 'Could not connect. Check your sync key.',
       });
     } finally {
       setTesting(false);
@@ -91,18 +95,20 @@ export default function SettingsScreen() {
 
   const handleSave = async () => {
     if (!syncKey.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Please enter a sync key.',
-      });
+      setErrorText('Please enter a sync key.');
+      return;
+    }
+
+    let creds;
+    try {
+      creds = decodeSyncKey(syncKey);
+    } catch (e: any) {
+      setErrorText(e.message || 'Invalid sync key format.');
       return;
     }
 
     setSaving(true);
     try {
-      const creds = decodeSyncKey(syncKey);
-
       // Save credentials in SecureStore
       await saveCredentials(creds.workerUrl, creds.syncSecret);
 
@@ -123,7 +129,7 @@ export default function SettingsScreen() {
       Toast.show({
         type: 'error',
         text1: 'Save Failed',
-        text2: e.message || 'Invalid sync key format.',
+        text2: e.message || 'Error occurred while saving.',
       });
     } finally {
       setSaving(false);
@@ -205,10 +211,19 @@ export default function SettingsScreen() {
           placeholder="Paste connection key here..."
           placeholderTextColor="#94A3B8"
           value={syncKey}
-          onChangeText={setSyncKey}
+          onChangeText={(val) => {
+            setSyncKey(val);
+            setErrorText(null);
+          }}
           autoCapitalize="none"
           autoCorrect={false}
         />
+
+        {errorText ? (
+          <Text className="text-rose-600 dark:text-rose-400 text-xs font-semibold mt-2.5">
+            {errorText}
+          </Text>
+        ) : null}
 
         {/* Action Buttons */}
         <View className="flex-row mt-6">

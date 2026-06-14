@@ -156,7 +156,7 @@ export default function SalesListScreen() {
               size={64}
             />
             <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg mt-4 text-center">
-              {searchQuery ? 'No Results Found' : 'No Sales Invoices Yet'}
+              {searchQuery ? 'No Results Found' : 'No sales recorded.'}
             </Text>
             <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center max-w-[260px]">
               {searchQuery

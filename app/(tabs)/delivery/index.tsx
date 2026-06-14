@@ -222,7 +222,7 @@ export default function DeliveryDashboardScreen() {
                 size={64}
               />
               <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg mt-4 text-center">
-                No Deliveries Found
+                No deliveries created.
               </Text>
               <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center max-w-[260px]">
                 There are no deliveries listed under the &ldquo;{activeTab === 'in_progress' ? 'In Progress' : activeTab}&rdquo; status tab.

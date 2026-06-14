@@ -6,6 +6,9 @@ import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { database } from '../db';
@@ -51,6 +54,11 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const initStore = useAppStore((state) => state.initStore);
+  const insets = useSafeAreaInsets();
+  const netInfo = useNetInfo();
+  const isOffline = netInfo.isConnected === false;
+  const syncStatus = useAppStore((state) => state.syncStatus);
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -82,14 +90,45 @@ function RootLayoutNav() {
     };
   }, [initStore]);
 
+  const handleRetrySync = () => {
+    runSync(database).catch(() => {});
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="settings" options={{ presentation: 'modal', title: 'Settings' }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        </Stack>
+        <View className="flex-1">
+          {/* Global network status banners */}
+          {isOffline ? (
+            <View style={{ paddingTop: insets.top }} className="bg-amber-500">
+              <View className="px-4 py-2 flex-row items-center justify-center">
+                <Text className="text-white text-xs font-bold text-center">
+                  You're offline — changes will sync when connected
+                </Text>
+              </View>
+            </View>
+          ) : syncStatus === 'error' ? (
+            <View style={{ paddingTop: insets.top }} className="bg-rose-600">
+              <View className="px-4 py-2.5 flex-row items-center justify-between">
+                <Text className="text-white text-xs font-semibold flex-1 mr-3">
+                  Sync failed. Will retry.
+                </Text>
+                <TouchableOpacity
+                  onPress={handleRetrySync}
+                  className="bg-white/20 px-3 py-1.5 rounded-lg active:scale-95"
+                >
+                  <Text className="text-white text-xs font-bold">Retry</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="settings" options={{ presentation: 'modal', title: 'Settings' }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+          </Stack>
+        </View>
       </ThemeProvider>
       <Toast />
     </QueryClientProvider>
