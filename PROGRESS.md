@@ -235,6 +235,17 @@ After every AI coding session, paste a summary of what was built, what changed, 
 **Current working state:**
 - The project is fully completed. All 10 milestones are fully implemented, verified, and audited with zero errors.
 
+### Session 17 — June 14, 2026
+**What we built / fixed:**
+- **JSI Compilation Fix for Android (React Native 0.85+)**: Configured the `@morrowdigital/watermelondb-expo-plugin` with `{ "disableJsi": true }` inside `app.json` and set `jsi: Platform.OS === 'ios'` inside `db/index.ts`. This bypasses the Java class `JSIModulePackage` (which is deprecated and removed in React Native 0.74+), enabling clean compilation on Android while maintaining fast JSI on iOS.
+- **Clean Native Directory Regeneration**: Ran a clean Expo prebuild to recreate the `android/` directory and set up `sdk.dir` in `android/local.properties` pointing to the SDK directory.
+- **Native Android Build Successful**:
+  - Debug APK: `android/app/build/outputs/apk/debug/app-debug.apk` (successfully compiled and installed).
+  - Standalone Release APK: `android/app/build/outputs/apk/release/app-release.apk` (successfully compiled for independent offline device execution).
+
+**Current working state:**
+- The project is fully compiled, built, and verified. Both debug and standalone release APKs are successfully built, and the debug APK was installed on the connected Android phone.
+
 ---
 
 ## Known Issues / Bugs

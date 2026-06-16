@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   RefreshControl,
   ScrollView,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';
@@ -16,54 +18,74 @@ import Toast from 'react-native-toast-message';
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Driver from '../../../db/models/Driver';
 import { useQuery } from '../../../db/hooks';
 import { runSync } from '../../../lib/sync';
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { GlassView } from '../../../components/GlassView';
+import { ScreenBackground } from '../../../components/ScreenBackground';
 
-// Memoized Row Item component to allow FlashList optimal recycling
+// Row Item component
 const DriverRow = React.memo(({ item, onToggleActive }: { item: Driver; onToggleActive: (driver: Driver) => void }) => {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
   const isActive = item.active === 1;
 
   return (
-    <View className="flex-row justify-between items-center bg-white dark:bg-slate-800 px-5 py-4 border-b border-slate-100 dark:border-slate-850">
-      <View className="flex-1 pr-4">
-        <Text className="text-base font-bold text-slate-900 dark:text-slate-50" numberOfLines={1}>
+    <GlassView
+      style={[
+        styles.row,
+        {
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        }
+      ]}
+      borderRadius={20}
+    >
+      <View style={styles.rowLeft}>
+        <Text style={[styles.nameText, { color: colors.text }]} numberOfLines={1}>
           {item.name}
         </Text>
-        <View className="flex-row items-center mt-1">
-          <Text className="text-slate-400 dark:text-slate-500 text-xs font-mono">
+        <View style={styles.metaRow}>
+          <Text style={[styles.phoneText, { color: colors.tabIconDefault }]}>
             {item.phone}
           </Text>
-          <View className="h-1.5 w-1.5 rounded-full mx-2 bg-slate-300 dark:bg-slate-700" />
-          <View className={`px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-slate-100 dark:bg-slate-900/60'}`}>
-            <Text className={`text-[10px] font-bold uppercase ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+          <View style={[styles.dot, { backgroundColor: colors.border }]} />
+          <View style={[styles.statusBadge, { backgroundColor: isActive ? (colorScheme === 'dark' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(209, 250, 229, 0.6)') : (colorScheme === 'dark' ? 'rgba(100, 116, 139, 0.15)' : 'rgba(241, 245, 249, 0.6)') }]}>
+            <Text style={[styles.statusBadgeText, { color: isActive ? colors.success : colors.tabIconDefault }]}>
               {isActive ? 'Active' : 'Inactive'}
             </Text>
           </View>
         </View>
       </View>
 
-      {/* 48x48dp Min Target Area Button */}
       <TouchableOpacity
         onPress={() => onToggleActive(item)}
-        style={{ minWidth: 90, minHeight: 48 }}
-        className={`px-3 py-2 border rounded-xl items-center justify-center active:scale-95 ${
-          isActive
-            ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
-            : 'border-indigo-600 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20'
-        }`}
+        style={[
+          styles.actionBtn,
+          { 
+            borderColor: isActive ? colors.border : colors.tint,
+            backgroundColor: isActive ? 'transparent' : (colorScheme === 'dark' ? 'rgba(45, 212, 191, 0.12)' : 'rgba(13, 148, 136, 0.06)'),
+          }
+        ]}
       >
-        <Text className={`text-xs font-bold ${isActive ? 'text-slate-500 dark:text-slate-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+        <Text style={[styles.actionBtnText, { color: isActive ? colors.tabIconDefault : colors.tint }]}>
           {isActive ? 'Deactivate' : 'Activate'}
         </Text>
       </TouchableOpacity>
-    </View>
+    </GlassView>
   );
 });
 
 export default function DriversScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+
   const [refreshing, setRefreshing] = useState(false);
   
   // Registration Form Modal State
@@ -101,7 +123,6 @@ export default function DriversScreen() {
   };
 
   const handleRegisterDriver = async () => {
-    // Validation
     const cleanPhone = driverPhone.replace(/\D/g, '');
     if (cleanPhone.length !== 10) {
       Toast.show({
@@ -114,7 +135,6 @@ export default function DriversScreen() {
 
     setSaving(true);
     try {
-      // Uniqueness check
       const phoneExists = await database.collections
         .get<Driver>('drivers')
         .query(Q.where('phone', cleanPhone))
@@ -135,7 +155,6 @@ export default function DriversScreen() {
       const timestamp = new Date().toISOString();
       const formattedName = driverName.trim() || 'Unnamed Driver';
 
-      // Atomic DB write
       await database.write(async () => {
         await database.collections.get<Driver>('drivers').create((driver) => {
           driver._raw.id = driverId;
@@ -150,12 +169,10 @@ export default function DriversScreen() {
         });
       });
 
-      // Clear Form
       setDriverName('');
       setDriverPhone('');
       setAddModalVisible(false);
 
-      // Open OTP view
       setCreatedDriverName(formattedName);
       setCreatedOtp(otpCode);
       setOtpModalVisible(true);
@@ -166,7 +183,6 @@ export default function DriversScreen() {
         text2: `${formattedName} created successfully.`,
       });
 
-      // Run sync in background
       runSync(database).catch((err) => {
         console.error('Post driver registration sync failed:', err);
       });
@@ -231,176 +247,407 @@ export default function DriversScreen() {
     }
   };
 
-  // Stably defined renderItem using useCallback to optimize FlashList recycling
   const renderItem = useCallback(({ item }: { item: Driver }) => {
     return <DriverRow item={item} onToggleActive={handleToggleActive} />;
   }, [handleToggleActive]);
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-      
-      {/* Drivers List */}
-      <FlashList
-        data={drivers}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        estimatedItemSize={78}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
-        }
-        ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20 px-8">
-            <SymbolView
-              name={{ ios: 'person.badge.plus', android: 'person_add', web: 'person_add' }}
-              tintColor="#CBD5E1"
-              size={64}
-            />
-            <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg mt-4 text-center">
-              No Registered Drivers
-            </Text>
-            <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center max-w-[260px]">
-              Register new delivery drivers using the plus button or pull down to sync.
-            </Text>
-          </View>
-        }
-      />
-
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        onPress={() => setAddModalVisible(true)}
-        className="absolute bottom-6 right-6 h-14 w-14 rounded-full bg-indigo-600 dark:bg-indigo-500 shadow-lg items-center justify-center active:scale-95"
-        style={{ shadowColor: '#4F46E5', shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
-      >
-        <SymbolView
-          name={{ ios: 'plus', android: 'add', web: 'add' }}
-          tintColor="#FFFFFF"
-          size={24}
+    <ScreenBackground>
+      {/* Set padding top for safe area in custom stack headers */}
+      <View style={styles.rootContainer}>
+        {/* Drivers List */}
+        <FlashList
+          data={drivers}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          estimatedItemSize={76}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <SymbolView
+                name={{ ios: 'person.badge.plus', android: 'person_add', web: 'person_add' }}
+                tintColor={colors.tabIconDefault}
+                size={48}
+              />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                No Registered Drivers
+              </Text>
+              <Text style={[styles.emptySub, { color: colors.tabIconDefault }]}>
+                Register new delivery drivers using the plus button or pull down to sync.
+              </Text>
+            </View>
+          }
         />
-      </TouchableOpacity>
 
-      {/* ----------------- REGISTER DRIVER MODAL ----------------- */}
-      <Modal visible={addModalVisible} animationType="slide" transparent>
-        <View className="flex-1 justify-end bg-black/50">
-          <View className="bg-white dark:bg-slate-800 rounded-t-3xl p-6 border-t border-slate-100 dark:border-slate-700/60 max-h-[90%]">
-            <View className="flex-row justify-between items-center mb-5">
-              <Text className="text-lg font-bold text-slate-900 dark:text-slate-50">Register Driver</Text>
-              <TouchableOpacity onPress={() => setAddModalVisible(false)} className="p-1">
+        {/* Floating Action Button */}
+        <TouchableOpacity
+          onPress={() => setAddModalVisible(true)}
+          style={[
+            styles.fab,
+            { 
+              backgroundColor: colors.tint, 
+              shadowColor: colors.tint,
+              bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80 
+            }
+          ]}
+          activeOpacity={0.8}
+        >
+          <SymbolView
+            name={{ ios: 'plus', android: 'add', web: 'add' }}
+            tintColor="#FFFFFF"
+            size={22}
+          />
+        </TouchableOpacity>
+
+        {/* ----------------- REGISTER DRIVER MODAL ----------------- */}
+        <Modal visible={addModalVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <GlassView style={styles.modalContent} intensity={Platform.OS === 'ios' ? 40 : 0} borderRadius={28}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Register Driver</Text>
+                <TouchableOpacity onPress={() => setAddModalVisible(false)} style={styles.modalCloseBtn}>
+                  <SymbolView
+                    name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
+                    tintColor={colors.tabIconDefault}
+                    size={22}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScroll}>
+                {/* Driver Name Input */}
+                <View style={styles.inputField}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>
+                    Driver Name (Optional)
+                  </Text>
+                  <TextInput
+                    style={[styles.textInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                    placeholder="Enter full name"
+                    placeholderTextColor={colors.tabIconDefault}
+                    value={driverName}
+                    onChangeText={setDriverName}
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* Driver Phone Input */}
+                <View style={styles.inputField}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>
+                    Phone Number (Required) *
+                  </Text>
+                  <TextInput
+                    style={[styles.textInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                    placeholder="10-digit mobile number"
+                    placeholderTextColor={colors.tabIconDefault}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    value={driverPhone}
+                    onChangeText={setDriverPhone}
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                  onPress={handleRegisterDriver}
+                  disabled={saving}
+                  style={[styles.modalSubmitBtn, { backgroundColor: colors.tint }]}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSubmitBtnText}>Register Account</Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </GlassView>
+          </View>
+        </Modal>
+
+        {/* ----------------- OTP SUCCESS DISPLAY MODAL ----------------- */}
+        <Modal visible={otpModalVisible} animationType="fade" transparent>
+          <View style={styles.otpOverlay}>
+            <GlassView style={styles.otpContent} intensity={Platform.OS === 'ios' ? 40 : 0} borderRadius={28}>
+              <View style={[styles.otpIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(209, 250, 229, 0.6)' }]}>
                 <SymbolView
-                  name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
-                  tintColor="#94A3B8"
-                  size={22}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView className="mb-4">
-              {/* Driver Name Input */}
-              <View className="mb-4">
-                <Text className="text-slate-800 dark:text-slate-100 font-bold text-sm mb-2">
-                  Driver Name (Optional)
-                </Text>
-                <TextInput
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-50 text-sm"
-                  placeholder="Enter full name"
-                  placeholderTextColor="#94A3B8"
-                  value={driverName}
-                  onChangeText={setDriverName}
-                  autoCorrect={false}
+                  name={{ ios: 'checkmark.shield.fill', android: 'check_circle', web: 'check_circle' }}
+                  tintColor={colors.success}
+                  size={24}
                 />
               </View>
 
-              {/* Driver Phone Input */}
-              <View className="mb-6">
-                <Text className="text-slate-800 dark:text-slate-100 font-bold text-sm mb-2">
-                  Phone Number (Required) *
+              <Text style={[styles.otpTitle, { color: colors.text }]}>
+                Account Created Successfully
+              </Text>
+              <Text style={[styles.otpSub, { color: colors.tabIconDefault }]}>
+                Registered credentials for {createdDriverName}
+              </Text>
+
+              {/* OTP Large display container */}
+              <View style={[styles.otpCodeContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.otpCodeText, { color: colors.text }]}>
+                  {createdOtp}
                 </Text>
-                <TextInput
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-50 text-sm font-mono"
-                  placeholder="10-digit mobile number"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  value={driverPhone}
-                  onChangeText={setDriverPhone}
-                  autoCorrect={false}
-                />
               </View>
 
-              {/* Submit Button */}
               <TouchableOpacity
-                onPress={handleRegisterDriver}
-                disabled={saving}
-                className="bg-indigo-600 dark:bg-indigo-500 py-3.5 rounded-xl justify-center items-center active:scale-[0.98] shadow-sm shadow-indigo-600/10"
+                onPress={handleCopyOtp}
+                style={styles.copyOtpBtn}
               >
-                {saving ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text className="text-white font-bold text-sm">Register Account</Text>
-                )}
+                <SymbolView
+                  name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
+                  tintColor={colors.tint}
+                  size={14}
+                />
+                <Text style={[styles.copyOtpText, { color: colors.tint }]}>
+                  Copy OTP Code
+                </Text>
               </TouchableOpacity>
-            </ScrollView>
+
+              <Text style={[styles.otpWarningText, { color: colors.danger }]}>
+                * Note: Share this code with the driver. For safety reasons, it will not be displayed again once you close this.
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => setOtpModalVisible(false)}
+                style={[styles.otpDoneBtn, { backgroundColor: colors.text }]}
+              >
+                <Text style={[styles.otpDoneBtnText, { color: colors.background }]}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            </GlassView>
           </View>
-        </View>
-      </Modal>
-
-      {/* ----------------- OTP SUCCESS DISPLAY MODAL ----------------- */}
-      <Modal visible={otpModalVisible} animationType="fade" transparent>
-        <View className="flex-1 justify-center items-center bg-black/60 px-6">
-          <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700/60 w-full max-w-sm items-center">
-            
-            <View className="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 items-center justify-center mb-4">
-              <SymbolView
-                name={{ ios: 'checkmark.shield.fill', android: 'check_circle', web: 'check_circle' }}
-                tintColor="#10B981"
-                size={28}
-              />
-            </View>
-
-            <Text className="text-base font-bold text-slate-900 dark:text-slate-50 text-center mb-1">
-              Account Created Successfully
-            </Text>
-            <Text className="text-slate-400 dark:text-slate-500 text-xs text-center mb-6">
-              Registered credentials for {createdDriverName}
-            </Text>
-
-            {/* OTP Large display container */}
-            <View className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-855 rounded-2xl py-4 px-6 mb-2 flex-row items-center justify-center w-full">
-              <Text className="text-3xl font-bold font-mono tracking-widest text-slate-800 dark:text-slate-100">
-                {createdOtp}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={handleCopyOtp}
-              className="flex-row items-center justify-center py-2 px-4 mb-6 active:scale-95"
-            >
-              <SymbolView
-                name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
-                tintColor="#4F46E5"
-                size={14}
-              />
-              <Text className="text-indigo-600 dark:text-indigo-400 font-bold text-xs ml-1.5">
-                Copy OTP Code
-              </Text>
-            </TouchableOpacity>
-
-            <Text className="text-[10px] text-rose-500 font-bold text-center mb-6 max-w-[240px]">
-              * Note: Share this code with the driver. For safety reasons, it will not be displayed again once you close this.
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => setOtpModalVisible(false)}
-              className="bg-slate-900 dark:bg-slate-50 w-full py-3 rounded-xl justify-center items-center active:scale-[0.98]"
-            >
-              <Text className="text-white dark:text-slate-900 font-bold text-sm">
-                Done
-              </Text>
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </Modal>
-
-    </SafeAreaView>
+        </Modal>
+      </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 110, // clear floating tab dock
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  rowLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  nameText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  phoneText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    marginHorizontal: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  statusBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  actionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 84,
+  },
+  actionBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  emptySub: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    height: 54,
+    width: 54,
+    borderRadius: 27,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    width: '100%',
+    padding: 20,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalCloseBtn: {
+    padding: 2,
+  },
+  modalScroll: {
+    marginBottom: 8,
+  },
+  inputField: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  textInput: {
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  modalSubmitBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  modalSubmitBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  otpOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  otpContent: {
+    width: '100%',
+    maxWidth: 320,
+    padding: 24,
+    alignItems: 'center',
+  },
+  otpIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  otpTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  otpSub: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: 20,
+  },
+  otpCodeContainer: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  otpCodeText: {
+    fontSize: 28,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    letterSpacing: 2,
+  },
+  copyOtpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    marginBottom: 16,
+  },
+  copyOtpText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  otpWarningText: {
+    fontSize: 9,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 13,
+  },
+  otpDoneBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpDoneBtnText: {
+    fontWeight: '800',
+    fontSize: 13,
+  },
+});

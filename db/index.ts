@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 
@@ -15,7 +16,7 @@ import DeliveryItem from './models/DeliveryItem';
 const adapter = new SQLiteAdapter({
   schema,
   dbName: 'wholesale_ledger_db',
-  jsi: true, // Use JS Interface for faster native access (React Native)
+  jsi: Platform.OS === 'ios', // JSI is disabled on Android due to React Native 0.74+ deprecations
   onSetUpError: (error) => {
     console.error('WatermelonDB adapter set up error:', error);
   },

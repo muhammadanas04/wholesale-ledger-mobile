@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,24 +6,33 @@ import {
   RefreshControl,
   SafeAreaView,
   Pressable,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';
 import Toast from 'react-native-toast-message';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Delivery from '../../../db/models/Delivery';
 import { useQuery, useRelation } from '../../../db/hooks';
 import { runSync } from '../../../lib/sync';
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { GlassView } from '../../../components/GlassView';
+import { ScreenBackground } from '../../../components/ScreenBackground';
 
 type DeliveryStatus = 'pending' | 'in_progress' | 'completed';
 
-// Extracted Subcomponent to render details (like Driver name & stop counts) reactively for each Delivery
+// Extracted Subcomponent to render details reactively for each Delivery
 function DeliveryCard({ delivery }: { delivery: Delivery }) {
   const driver = useRelation(delivery.driver);
   const items = useQuery(useMemo(() => delivery.items, [delivery]));
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
 
   const completedStops = useMemo(() => {
     return items.filter((item) => item.status === 'done').length;
@@ -34,11 +43,20 @@ function DeliveryCard({ delivery }: { delivery: Delivery }) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400';
+        return {
+          bg: colorScheme === 'dark' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(209, 250, 229, 0.6)',
+          text: colors.success,
+        };
       case 'in_progress':
-        return 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400';
+        return {
+          bg: colorScheme === 'dark' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(224, 242, 254, 0.6)',
+          text: colors.accent,
+        };
       default:
-        return 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400';
+        return {
+          bg: colorScheme === 'dark' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(254, 243, 199, 0.6)',
+          text: colors.warning,
+        };
     }
   };
 
@@ -68,55 +86,71 @@ function DeliveryCard({ delivery }: { delivery: Delivery }) {
     }
   }, [delivery.createdAt]);
 
+  const statusStyle = getStatusColor(delivery.status);
+
   return (
     <Pressable
       onPress={() => router.push(`/delivery/${delivery.id}`)}
-      className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-800/60 mb-4 shadow-sm active:scale-[0.99]"
+      style={styles.cardPressable}
     >
-      <View className="flex-row justify-between items-start mb-3">
-        <View className="flex-1 pr-3">
-          <Text className="text-base font-bold text-slate-900 dark:text-slate-50" numberOfLines={1}>
-            {driver ? driver.name : 'Unassigned Driver'}
-          </Text>
-          <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 font-mono">
-            {formattedDate}
-          </Text>
-        </View>
+      {({ pressed }) => (
+        <GlassView
+          style={[
+            styles.deliveryCard,
+            {
+              borderColor: colors.border,
+              backgroundColor: pressed
+                ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.95)')
+                : colors.surface,
+            }
+          ]}
+          borderRadius={20}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              <Text style={[styles.driverName, { color: colors.text }]} numberOfLines={1}>
+                {driver ? driver.name : 'Unassigned Driver'}
+              </Text>
+              <Text style={[styles.cardDate, { color: colors.tabIconDefault }]}>
+                {formattedDate}
+              </Text>
+            </View>
 
-        <View className={`px-2.5 py-1 rounded-full ${getStatusColor(delivery.status)}`}>
-          <Text className="text-[10px] font-bold uppercase">
-            {getStatusLabel(delivery.status)}
-          </Text>
-        </View>
-      </View>
+            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+              <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                {getStatusLabel(delivery.status)}
+              </Text>
+            </View>
+          </View>
 
-      {/* stops details */}
-      <View className="flex-row items-center bg-slate-50 dark:bg-slate-900/50 rounded-xl px-4 py-2.5 mb-2.5">
-        <SymbolView
-          name={{ ios: 'mappin.and.ellipse', android: 'local_shipping', web: 'local_shipping' }}
-          tintColor="#4F46E5"
-          size={16}
-        />
-        <Text className="text-xs text-slate-600 dark:text-slate-300 font-semibold ml-2">
-          {completedStops} / {totalStops} stops completed
-        </Text>
-      </View>
+          {/* stops details */}
+          <View style={[styles.stopsBox, { backgroundColor: colors.background }]}>
+            <SymbolView
+              name={{ ios: 'mappin.and.ellipse', android: 'local_shipping', web: 'local_shipping' }}
+              tintColor={colors.tint}
+              size={14}
+            />
+            <Text style={[styles.stopsText, { color: colors.text }]}>
+              {completedStops} / {totalStops} stops completed
+            </Text>
+          </View>
 
-      {delivery.notes ? (
-        <Text className="text-slate-400 dark:text-slate-500 text-xs mt-1" numberOfLines={2}>
-          {delivery.notes}
-        </Text>
-      ) : null}
+          {delivery.notes && (
+            <Text style={[styles.notesText, { color: colors.tabIconDefault }]} numberOfLines={2}>
+              {delivery.notes}
+            </Text>
+          )}
+        </GlassView>
+      )}
     </Pressable>
   );
 }
 
-// Stably defined renderItem outside component body to avoid rebuilding on every render
-const renderItem = ({ item }: { item: Delivery }) => {
-  return <DeliveryCard delivery={item} />;
-};
-
 export default function DeliveryDashboardScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+
   const [activeTab, setActiveTab] = useState<DeliveryStatus>('pending');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -146,106 +180,252 @@ export default function DeliveryDashboardScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-      
-      {/* Top Quick Sub-Navigation Buttons Bar */}
-      <View className="flex-row px-5 pt-4 pb-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/40">
-        <TouchableOpacity
-          onPress={() => router.push('/delivery/drivers')}
-          className="flex-1 flex-row items-center justify-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 py-3 rounded-xl mr-2 active:scale-95"
-        >
-          <SymbolView
-            name={{ ios: 'person.2.fill', android: 'people', web: 'people' }}
-            tintColor="#4F46E5"
-            size={16}
-          />
-          <Text className="font-semibold text-xs text-slate-700 dark:text-slate-300 ml-2">
-            Drivers List
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push('/delivery/map')}
-          className="flex-1 flex-row items-center justify-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 py-3 rounded-xl ml-2 active:scale-95"
-        >
-          <SymbolView
-            name={{ ios: 'map.fill', android: 'map', web: 'map' }}
-            tintColor="#4F46E5"
-            size={16}
-          />
-          <Text className="font-semibold text-xs text-slate-700 dark:text-slate-300 ml-2">
-            Live tracker
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Selection Bar */}
-      <View className="flex-row border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 px-3">
-        {(['pending', 'in_progress', 'completed'] as const).map((status) => (
+    <ScreenBackground>
+      {/* Set padding top for safe area in custom stack headers */}
+      <View style={styles.rootContainer}>
+        
+        {/* Top Quick Sub-Navigation Buttons Bar */}
+        <View style={styles.quickNav}>
           <TouchableOpacity
-            key={status}
-            className={`flex-1 py-3.5 items-center border-b-2 ${
-              activeTab === status
-                ? 'border-indigo-600 dark:border-indigo-500'
-                : 'border-transparent'
-            }`}
-            onPress={() => setActiveTab(status)}
+            onPress={() => router.push('/delivery/drivers')}
+            style={[styles.quickNavBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text
-              className={`font-semibold text-xs capitalize ${
-                activeTab === status
-                  ? 'text-indigo-600 dark:text-indigo-400 font-bold'
-                  : 'text-slate-400 dark:text-slate-500'
-              }`}
-            >
-              {status === 'in_progress' ? 'In Progress' : status}
+            <SymbolView
+              name={{ ios: 'person.2.fill', android: 'people', web: 'people' }}
+              tintColor={colors.tint}
+              size={14}
+            />
+            <Text style={[styles.quickNavText, { color: colors.text }]}>
+              Drivers List
             </Text>
           </TouchableOpacity>
-        ))}
-      </View>
 
-      {/* Deliveries List */}
-      <View className="flex-1 px-5 pt-4">
-        <FlashList
-          data={deliveries}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          estimatedItemSize={140}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
-          }
-          ListEmptyComponent={
-            <View className="py-20 items-center justify-center">
-              <SymbolView
-                name={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
-                tintColor="#CBD5E1"
-                size={64}
-              />
-              <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg mt-4 text-center">
-                No deliveries created.
-              </Text>
-              <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center max-w-[260px]">
-                There are no deliveries listed under the &ldquo;{activeTab === 'in_progress' ? 'In Progress' : activeTab}&rdquo; status tab.
-              </Text>
-            </View>
-          }
-        />
-      </View>
+          <TouchableOpacity
+            onPress={() => router.push('/delivery/map')}
+            style={[styles.quickNavBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <SymbolView
+              name={{ ios: 'map.fill', android: 'map', web: 'map' }}
+              tintColor={colors.tint}
+              size={14}
+            />
+            <Text style={[styles.quickNavText, { color: colors.text }]}>
+              Live tracker
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Floating Action Button */}
-      <Link href="/delivery/new-delivery" asChild>
-        <TouchableOpacity
-          className="absolute bottom-6 right-6 h-14 w-14 rounded-full bg-indigo-600 dark:bg-indigo-500 shadow-lg items-center justify-center active:scale-95"
-          style={{ shadowColor: '#4F46E5', shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
-        >
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            tintColor="#FFFFFF"
-            size={24}
+        {/* Tab Selection Bar */}
+        <View style={[styles.tabBar, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+          {(['pending', 'in_progress', 'completed'] as const).map((status) => (
+            <TouchableOpacity
+              key={status}
+              style={[
+                styles.tabButton,
+                activeTab === status && { borderBottomColor: colors.tint, borderBottomWidth: 2 }
+              ]}
+              onPress={() => setActiveTab(status)}
+            >
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  { 
+                    color: activeTab === status ? colors.tint : colors.tabIconDefault,
+                    fontWeight: activeTab === status ? '700' : '500',
+                  }
+                ]}
+              >
+                {status === 'in_progress' ? 'In Progress' : status === 'completed' ? 'Completed' : 'Pending'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Deliveries List */}
+        <View style={styles.listContainer}>
+          <FlashList
+            data={deliveries}
+            renderItem={({ item }) => <DeliveryCard delivery={item} />}
+            keyExtractor={(item) => item.id}
+            estimatedItemSize={120}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <SymbolView
+                  name={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
+                  tintColor={colors.tabIconDefault}
+                  size={48}
+                />
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                  No deliveries created.
+                </Text>
+                <Text style={[styles.emptySub, { color: colors.tabIconDefault }]}>
+                  There are no deliveries listed under the &ldquo;{activeTab === 'in_progress' ? 'In Progress' : activeTab === 'completed' ? 'Completed' : 'Pending'}&rdquo; status tab.
+                </Text>
+              </View>
+            }
           />
-        </TouchableOpacity>
-      </Link>
+        </View>
 
-    </SafeAreaView>
+        {/* Floating Action Button */}
+        <Link href="/delivery/new-delivery" asChild>
+          <TouchableOpacity
+            style={[
+              styles.fab,
+              { 
+                backgroundColor: colors.tint, 
+                shadowColor: colors.tint,
+                bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80 
+              }
+            ]}
+            activeOpacity={0.8}
+          >
+            <SymbolView
+              name={{ ios: 'plus', android: 'add', web: 'add' }}
+              tintColor="#FFFFFF"
+              size={22}
+            />
+          </TouchableOpacity>
+        </Link>
+      </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
+  quickNav: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  quickNavBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginHorizontal: 4,
+  },
+  quickNavText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    marginBottom: 10,
+    marginHorizontal: 20,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabButtonText: {
+    fontSize: 12,
+  },
+  listContainer: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 110, // clear floating tab dock
+  },
+  cardPressable: {
+    marginBottom: 10,
+  },
+  deliveryCard: {
+    borderWidth: 1,
+    padding: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  cardHeaderLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  driverName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cardDate: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 8,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  stopsBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  stopsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  notesText: {
+    fontSize: 10,
+    marginTop: 4,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  emptySub: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    height: 54,
+    width: 54,
+    borderRadius: 27,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

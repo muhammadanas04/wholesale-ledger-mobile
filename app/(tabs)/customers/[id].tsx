@@ -8,12 +8,14 @@ import {
   Linking,
   Share,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Customer from '../../../db/models/Customer';
@@ -22,23 +24,29 @@ import SaleItem from '../../../db/models/SaleItem';
 import Payment from '../../../db/models/Payment';
 import { useQuery, useRelation } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { GlassView } from '../../../components/GlassView';
+import { ScreenBackground } from '../../../components/ScreenBackground';
 
-// Sub-component to render individual sale item rows and join Product relation reactively
+// Sub-component to render individual sale item rows
 function SaleItemRow({ item }: { item: SaleItem }) {
   const product = useRelation(item.product);
   const lineTotal = item.totalPrice || item.qty * item.unitPrice;
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
 
   return (
-    <View className="flex-row justify-between py-2 border-b border-slate-100/60 dark:border-slate-800/30 last:border-b-0">
-      <View className="flex-1">
-        <Text className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+    <View style={[styles.itemRow, { borderBottomColor: colors.border }]}>
+      <View style={styles.itemRowLeft}>
+        <Text style={[styles.itemRowName, { color: colors.text }]}>
           {product ? product.name : 'Loading product...'}
         </Text>
-        <Text className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+        <Text style={[styles.itemRowMeta, { color: colors.tabIconDefault }]}>
           {item.qty} {product ? product.unit : 'pcs'} x {formatCurrency(item.unitPrice)}
         </Text>
       </View>
-      <Text className="text-xs font-mono font-semibold text-slate-800 dark:text-slate-200">
+      <Text style={[styles.itemRowTotal, { color: colors.text }]}>
         {formatCurrency(lineTotal)}
       </Text>
     </View>
@@ -49,17 +57,19 @@ function SaleItemRow({ item }: { item: SaleItem }) {
 function SaleItemsList({ sale }: { sale: Sale }) {
   const itemsQuery = useMemo(() => sale.items, [sale]);
   const items = useQuery(itemsQuery);
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
 
   if (items.length === 0) {
     return (
-      <View className="py-3 px-5 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800/40">
-        <Text className="text-xs text-slate-400 dark:text-slate-500">No items found for this sale.</Text>
+      <View style={[styles.emptyItemsContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <Text style={{ color: colors.tabIconDefault, fontSize: 11 }}>No items found for this sale.</Text>
       </View>
     );
   }
 
   return (
-    <View className="bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800/40 px-5 py-2">
+    <View style={[styles.itemsContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
       {items.map((item) => (
         <SaleItemRow key={item.id} item={item} />
       ))}
@@ -69,11 +79,20 @@ function SaleItemsList({ sale }: { sale: Sale }) {
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [, setTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'sales' | 'payments' | 'bill'>('sales');
   const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
+
+  // Selection states for custom bill generation
+  const [selectedSaleIds, setSelectedSaleIds] = useState<Set<string>>(new Set());
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<Set<string>>(new Set());
+  const [initializedSelection, setInitializedSelection] = useState(false);
 
   // 1. Reactive subscription to Customer record by ID
   useEffect(() => {
@@ -96,7 +115,7 @@ export default function CustomerDetailScreen() {
     return () => subscription.unsubscribe();
   }, [id]);
 
-  // Dummy query fallbacks for null configurations (Issue 19)
+  // Dummy query fallbacks
   const dummySalesQuery = useMemo(() => {
     return database.collections.get<Sale>('sales').query(Q.where('id', ''));
   }, []);
@@ -121,7 +140,16 @@ export default function CustomerDetailScreen() {
 
   const payments = useQuery(paymentsQuery);
 
-  // 4. Sum transactions reactively to build dynamic stats (Issue 17)
+  // Initialize selection sets to include all transactions by default on load
+  useEffect(() => {
+    if (!initializedSelection && (sales.length > 0 || payments.length > 0)) {
+      setSelectedSaleIds(new Set(sales.map((s) => s.id)));
+      setSelectedPaymentIds(new Set(payments.map((p) => p.id)));
+      setInitializedSelection(true);
+    }
+  }, [sales, payments, initializedSelection]);
+
+  // Calculations for all transactions (full ledger)
   const totalSalesPaise = useMemo(() => {
     return sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
   }, [sales]);
@@ -134,10 +162,28 @@ export default function CustomerDetailScreen() {
     return payments.reduce((sum, p) => sum + (p.discount || 0), 0);
   }, [payments]);
 
-  const previousBalancePaise = useMemo(() => {
-    if (!customer) return 0;
-    return customer.balance - (totalSalesPaise - totalPaidPaise - totalDiscountsPaise);
-  }, [customer, totalSalesPaise, totalPaidPaise, totalDiscountsPaise]);
+  // Calculations for selected transactions only (custom bill)
+  const selectedSalesPaise = useMemo(() => {
+    return sales
+      .filter((s) => selectedSaleIds.has(s.id))
+      .reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+  }, [sales, selectedSaleIds]);
+
+  const selectedPaidPaise = useMemo(() => {
+    return payments
+      .filter((p) => selectedPaymentIds.has(p.id))
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+  }, [payments, selectedPaymentIds]);
+
+  const selectedDiscountsPaise = useMemo(() => {
+    return payments
+      .filter((p) => selectedPaymentIds.has(p.id))
+      .reduce((sum, p) => sum + (p.discount || 0), 0);
+  }, [payments, selectedPaymentIds]);
+
+  const selectedBalanceDue = useMemo(() => {
+    return selectedSalesPaise - selectedPaidPaise - selectedDiscountsPaise;
+  }, [selectedSalesPaise, selectedPaidPaise, selectedDiscountsPaise]);
 
   const formattedDate = useMemo(() => {
     const today = new Date();
@@ -147,7 +193,7 @@ export default function CustomerDetailScreen() {
     return `${dd}/${mm}/${yyyy}`;
   }, []);
 
-  // 5. Ledger Bill Text Generation (Issue 17 & 27)
+  // 5. Custom Bill Text Generation based on selections
   const billText = useMemo(() => {
     if (!customer) return '';
     return `Wholesale Ledger
@@ -156,30 +202,33 @@ Date: ${formattedDate}
 Customer: ${customer.name}
 Phone: ${customer.phone || 'N/A'}
 
-Previous Balance: ${formatCurrency(previousBalancePaise)}
-Total Sales:      +${formatCurrency(totalSalesPaise)}
-Total Paid:       -${formatCurrency(totalPaidPaise)}
-Total Discount:   -${formatCurrency(totalDiscountsPaise)}
+Selected Sales:    +${formatCurrency(selectedSalesPaise)}
+Selected Received: -${formatCurrency(selectedPaidPaise)}
+Selected Discount: -${formatCurrency(selectedDiscountsPaise)}
 ──────────────────────
-Balance Due:      ${formatCurrency(customer.balance)}`;
-  }, [customer, formattedDate, previousBalancePaise, totalSalesPaise, totalPaidPaise, totalDiscountsPaise]);
+Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
+  }, [customer, formattedDate, selectedSalesPaise, selectedPaidPaise, selectedDiscountsPaise, selectedBalanceDue]);
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-slate-50 dark:bg-slate-900">
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </View>
+      <ScreenBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+        </View>
+      </ScreenBackground>
     );
   }
 
   if (!customer) {
     return (
-      <View className="flex-1 justify-center items-center bg-slate-50 dark:bg-slate-900 px-6">
-        <Text className="text-lg font-bold text-slate-800 dark:text-slate-100">Customer Not Found</Text>
-        <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center">
-          The selected client record does not exist or has been removed.
-        </Text>
-      </View>
+      <ScreenBackground>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorTitle, { color: colors.text }]}>Customer Not Found</Text>
+          <Text style={[styles.errorSub, { color: colors.tabIconDefault }]}>
+            The selected client record does not exist or has been removed.
+          </Text>
+        </View>
+      </ScreenBackground>
     );
   }
 
@@ -265,306 +314,771 @@ Balance Due:      ${formatCurrency(customer.balance)}`;
     }
   };
 
-  const getBalanceStyle = (balance: number) => {
-    if (balance > 0) return 'text-rose-600 dark:text-rose-400';
-    if (balance === 0) return 'text-emerald-600 dark:text-emerald-400';
-    return 'text-amber-600 dark:text-amber-400';
+  // Toggle sale selection
+  const toggleSaleSelection = (saleId: string) => {
+    const next = new Set(selectedSaleIds);
+    if (next.has(saleId)) {
+      next.delete(saleId);
+    } else {
+      next.add(saleId);
+    }
+    setSelectedSaleIds(next);
   };
 
+  // Toggle payment selection
+  const togglePaymentSelection = (paymentId: string) => {
+    const next = new Set(selectedPaymentIds);
+    if (next.has(paymentId)) {
+      next.delete(paymentId);
+    } else {
+      next.add(paymentId);
+    }
+    setSelectedPaymentIds(next);
+  };
+
+  // Select/Deselect All Transactions
+  const toggleSelectAll = () => {
+    const allSalesSelected = selectedSaleIds.size === sales.length;
+    const allPaymentsSelected = selectedPaymentIds.size === payments.length;
+
+    if (allSalesSelected && allPaymentsSelected) {
+      // Deselect all
+      setSelectedSaleIds(new Set());
+      setSelectedPaymentIds(new Set());
+    } else {
+      // Select all
+      setSelectedSaleIds(new Set(sales.map((s) => s.id)));
+      setSelectedPaymentIds(new Set(payments.map((p) => p.id)));
+    }
+  };
+
+  const isAllSelected = selectedSaleIds.size === sales.length && selectedPaymentIds.size === payments.length;
+
   return (
-    <View className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <ScrollView contentContainerStyle={{ paddingBottom: 110 }} className="flex-1">
-        {/* Sticky Profile Header Card */}
-        <View className="bg-white dark:bg-slate-800 px-5 pt-6 pb-5 border-b border-slate-100 dark:border-slate-800/50 shadow-sm">
-          <View className="flex-row justify-between items-start">
-            <View className="flex-1 pr-4">
-              <Text className="text-2xl font-bold text-slate-900 dark:text-slate-50">
-                {customer.name}
-              </Text>
-              {customer.phone ? (
-                <Text className="text-slate-400 dark:text-slate-500 font-mono text-sm mt-1">
-                  {customer.phone}
+    <ScreenBackground>
+      {/* Set padding top for safe area in custom stack headers */}
+      <View style={styles.rootContainer}>
+        <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scrollView}>
+          {/* Sticky Profile Header Card */}
+          <GlassView style={styles.profileCard}>
+            <View style={styles.profileHeaderRow}>
+              <View style={styles.profileTextCol}>
+                <Text style={[styles.clientName, { color: colors.text }]}>
+                  {customer.name}
                 </Text>
-              ) : (
-                <Text className="text-slate-400 dark:text-slate-500 text-xs italic mt-1">
-                  No registered phone
-                </Text>
-              )}
-            </View>
-            <View className="items-end">
-              <Text className="text-slate-400 dark:text-slate-500 text-[10px] uppercase font-bold tracking-wider">
-                Balance Due
-              </Text>
-              <Text className={`text-2xl font-mono ${getBalanceStyle(customer.balance)} mt-0.5`}>
-                {formatCurrency(customer.balance)}
-              </Text>
-            </View>
-          </View>
-
-          {customer.address ? (
-            <View className="mt-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 flex-row items-start">
-              <SymbolView
-                name={{ ios: 'mappin.circle', android: 'location_on', web: 'location_on' }}
-                tintColor="#94A3B8"
-                size={16}
-                style={{ marginTop: 2 }}
-              />
-              <Text className="text-slate-500 dark:text-slate-400 text-xs ml-2 flex-1">
-                {customer.address}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Quick Actions Profile Contact Buttons */}
-          <View className="flex-row mt-5">
-            <TouchableOpacity
-              onPress={handleCall}
-              disabled={!customer.phone}
-              className={`flex-1 flex-row items-center justify-center py-3 rounded-xl mr-2 border border-slate-200 dark:border-slate-700 active:scale-95 ${
-                customer.phone ? 'bg-slate-50 dark:bg-slate-900/50' : 'opacity-40'
-              }`}
-            >
-              <SymbolView
-                name={{ ios: 'phone.fill', android: 'call', web: 'call' }}
-                tintColor={customer.phone ? '#4F46E5' : '#94A3B8'}
-                size={16}
-              />
-              <Text className={`font-semibold text-xs ml-2 ${customer.phone ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'}`}>
-                Call Client
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleSMS}
-              disabled={!customer.phone}
-              className={`flex-1 flex-row items-center justify-center py-3 rounded-xl ml-2 border border-slate-200 dark:border-slate-700 active:scale-95 ${
-                customer.phone ? 'bg-slate-50 dark:bg-slate-900/50' : 'opacity-40'
-              }`}
-            >
-              <SymbolView
-                name={{ ios: 'message.fill', android: 'sms', web: 'sms' }}
-                tintColor={customer.phone ? '#4F46E5' : '#94A3B8'}
-                size={16}
-              />
-              <Text className={`font-semibold text-xs ml-2 ${customer.phone ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'}`}>
-                Send Message
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Tab Selection Bar */}
-        <View className="flex-row border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 px-2 mt-4">
-          {(['sales', 'payments', 'bill'] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              className={`flex-1 py-3.5 items-center border-b-2 ${
-                activeTab === tab
-                  ? 'border-indigo-600 dark:border-indigo-500'
-                  : 'border-transparent'
-              }`}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text
-                className={`font-semibold text-sm capitalize ${
-                  activeTab === tab
-                    ? 'text-indigo-600 dark:text-indigo-400 font-bold'
-                    : 'text-slate-400 dark:text-slate-500'
-                }`}
-              >
-                {tab === 'bill' ? 'Share Bill' : tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Tab Content Panels */}
-        <View className="mt-2">
-          {/* Sales Tab Panel */}
-          {activeTab === 'sales' && (
-            <View>
-              {sales.length === 0 ? (
-                <View className="py-12 items-center justify-center">
-                  <SymbolView
-                    name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
-                    tintColor="#CBD5E1"
-                    size={48}
-                  />
-                  <Text className="text-slate-400 dark:text-slate-500 text-sm mt-3">
-                    No sales recorded for this customer.
+                {customer.phone ? (
+                  <Text style={[styles.clientPhone, { color: colors.tabIconDefault }]}>
+                    {customer.phone}
                   </Text>
-                </View>
-              ) : (
-                sales.map((sale) => {
-                  const isExpanded = expandedSaleId === sale.id;
-                  return (
-                    <View
-                      key={sale.id}
-                      className="border-b border-slate-100 dark:border-slate-800/40 bg-white dark:bg-slate-800"
-                    >
-                      <TouchableOpacity
-                        className="flex-row justify-between items-center px-5 py-4 active:bg-slate-50 dark:active:bg-slate-700/20"
-                        onPress={() => setExpandedSaleId(isExpanded ? null : sale.id)}
-                      >
-                        <View>
-                          <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                            Sale — {sale.date}
-                          </Text>
-                          {sale.notes ? (
-                            <Text
-                              className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-[240px]"
-                              numberOfLines={1}
-                            >
-                              {sale.notes}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <View className="flex-row items-center">
-                          <Text className="text-sm font-mono font-bold text-rose-600 dark:text-rose-400 mr-2">
-                            +{formatCurrency(sale.totalAmount)}
-                          </Text>
-                          <SymbolView
-                            name={{
-                              ios: isExpanded ? 'chevron.up' : 'chevron.down',
-                              android: isExpanded ? 'expand_less' : 'expand_more',
-                              web: isExpanded ? 'expand_less' : 'expand_more',
-                            }}
-                            tintColor="#94A3B8"
-                            size={16}
-                          />
-                        </View>
-                      </TouchableOpacity>
-                      {isExpanded ? <SaleItemsList sale={sale} /> : null}
-                    </View>
-                  );
-                })
-              )}
+                ) : (
+                  <Text style={[styles.clientPhoneNo, { color: colors.tabIconDefault }]}>
+                    No registered phone
+                  </Text>
+                )}
+              </View>
+              <View style={styles.balanceCol}>
+                <Text style={[styles.balanceLabel, { color: colors.tabIconDefault }]}>
+                  Balance Due
+                </Text>
+                <Text style={[styles.balanceValue, { color: customer.balance > 0 ? colors.danger : colors.success }]}>
+                  {formatCurrency(customer.balance)}
+                </Text>
+              </View>
+            </View>
+
+            {customer.address ? (
+              <View style={[styles.addressBox, { backgroundColor: colors.background }]}>
+                <SymbolView
+                  name={{ ios: 'mappin.circle', android: 'location_on', web: 'location_on' }}
+                  tintColor={colors.tabIconDefault}
+                  size={16}
+                  style={styles.addressIcon}
+                />
+                <Text style={[styles.addressText, { color: colors.text }]}>
+                  {customer.address}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Quick Actions Buttons */}
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity
+                onPress={handleCall}
+                disabled={!customer.phone}
+                style={[
+                  styles.quickActionBtn,
+                  { borderColor: colors.border },
+                  customer.phone ? { backgroundColor: colors.surface } : { opacity: 0.4 }
+                ]}
+              >
+                <SymbolView
+                  name={{ ios: 'phone.fill', android: 'call', web: 'call' }}
+                  tintColor={customer.phone ? colors.tint : colors.tabIconDefault}
+                  size={14}
+                />
+                <Text style={[styles.quickActionText, { color: customer.phone ? colors.text : colors.tabIconDefault }]}>
+                  Call Client
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSMS}
+                disabled={!customer.phone}
+                style={[
+                  styles.quickActionBtn,
+                  { borderColor: colors.border },
+                  customer.phone ? { backgroundColor: colors.surface } : { opacity: 0.4 }
+                ]}
+              >
+                <SymbolView
+                  name={{ ios: 'message.fill', android: 'sms', web: 'sms' }}
+                  tintColor={customer.phone ? colors.tint : colors.tabIconDefault}
+                  size={14}
+                />
+                <Text style={[styles.quickActionText, { color: customer.phone ? colors.text : colors.tabIconDefault }]}>
+                  Message
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </GlassView>
+
+          {/* Selection tools / select all bar */}
+          {(activeTab === 'sales' || activeTab === 'payments') && (sales.length > 0 || payments.length > 0) && (
+            <View style={styles.selectionBar}>
+              <TouchableOpacity
+                style={[styles.selectAllBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={toggleSelectAll}
+              >
+                <SymbolView
+                  name={{
+                    ios: isAllSelected ? 'checkmark.circle.fill' : 'circle',
+                    android: isAllSelected ? 'check_circle' : 'radio_button_unchecked',
+                    web: isAllSelected ? 'check_circle' : 'radio_button_unchecked',
+                  }}
+                  tintColor={isAllSelected ? colors.tint : colors.tabIconDefault}
+                  size={16}
+                />
+                <Text style={[styles.selectAllText, { color: colors.text }]}>
+                  {isAllSelected ? 'Deselect All' : 'Select All Ledger'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.selectedCountText, { color: colors.tabIconDefault }]}>
+                {selectedSaleIds.size + selectedPaymentIds.size} items selected
+              </Text>
             </View>
           )}
 
-          {/* Payments Tab Panel */}
-          {activeTab === 'payments' && (
-            <View>
-              {payments.length === 0 ? (
-                <View className="py-12 items-center justify-center">
-                  <SymbolView
-                    name={{ ios: 'indianrupeesign.square', android: 'payments', web: 'payments' }}
-                    tintColor="#CBD5E1"
-                    size={48}
-                  />
-                  <Text className="text-slate-400 dark:text-slate-500 text-sm mt-3">
-                    No payments recorded for this customer.
-                  </Text>
-                </View>
-              ) : (
-                payments.map((payment) => (
-                  <View
-                    key={payment.id}
-                    className="flex-row justify-between items-center px-5 py-4 border-b border-slate-100 dark:border-slate-800/40 bg-white dark:bg-slate-800"
-                  >
-                    <View className="flex-1 pr-4">
-                      <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        Payment — {payment.date}
-                      </Text>
-                      {payment.notes ? (
-                        <Text className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                          {payment.notes}
-                        </Text>
-                      ) : null}
-                      {payment.discount > 0 ? (
-                        <Text className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-1">
-                          Discount Applied: {formatCurrency(payment.discount)}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      -{formatCurrency(payment.amount)}
+          {/* Tab Selection Bar */}
+          <View style={[styles.tabBar, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+            {(['sales', 'payments', 'bill'] as const).map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tabButton,
+                  activeTab === tab && { borderBottomColor: colors.tint, borderBottomWidth: 2 }
+                ]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    { 
+                      color: activeTab === tab ? colors.tint : colors.tabIconDefault,
+                      fontWeight: activeTab === tab ? '700' : '500',
+                    }
+                  ]}
+                >
+                  {tab === 'bill' ? 'Share Bill' : tab === 'sales' ? 'Sales' : 'Payments'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Tab Content Panels */}
+          <View style={styles.tabContentContainer}>
+            {/* Sales Tab Panel */}
+            {activeTab === 'sales' && (
+              <View>
+                {sales.length === 0 ? (
+                  <View style={styles.emptyPanel}>
+                    <SymbolView
+                      name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
+                      tintColor={colors.tabIconDefault}
+                      size={44}
+                    />
+                    <Text style={[styles.emptyPanelText, { color: colors.tabIconDefault }]}>
+                      No sales recorded for this customer.
                     </Text>
                   </View>
-                ))
-              )}
-            </View>
-          )}
+                ) : (
+                  sales.map((sale) => {
+                    const isExpanded = expandedSaleId === sale.id;
+                    const isSelected = selectedSaleIds.has(sale.id);
+                    return (
+                      <GlassView
+                        key={sale.id}
+                        style={styles.saleRowContainer}
+                        borderRadius={16}
+                      >
+                        <View style={styles.saleRowHeader}>
+                          {/* Checkbox selector */}
+                          <TouchableOpacity
+                            onPress={() => toggleSaleSelection(sale.id)}
+                            style={styles.checkboxContainer}
+                          >
+                            <SymbolView
+                              name={{
+                                ios: isSelected ? 'checkmark.circle.fill' : 'circle',
+                                android: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                web: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                              }}
+                              tintColor={isSelected ? colors.tint : colors.tabIconDefault}
+                              size={18}
+                            />
+                          </TouchableOpacity>
 
-          {/* Bill Generation Tab Panel */}
-          {activeTab === 'bill' && (
-            <View className="px-5 py-4">
-              <View className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-5 mb-5 shadow-inner">
-                <Text className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-widest font-semibold mb-3">
-                  Preview Message
-                </Text>
-                <Text className="text-slate-800 dark:text-slate-200 text-sm font-mono leading-6">
-                  {billText}
-                </Text>
+                          <TouchableOpacity
+                            style={styles.saleRowClickable}
+                            onPress={() => setExpandedSaleId(isExpanded ? null : sale.id)}
+                          >
+                            <View style={styles.saleDetailsCol}>
+                              <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                                Sale — {sale.date}
+                              </Text>
+                              {sale.notes && (
+                                <Text
+                                  style={[styles.transactionNotes, { color: colors.tabIconDefault }]}
+                                  numberOfLines={1}
+                                >
+                                  {sale.notes}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.saleAmountRow}>
+                              <Text style={[styles.saleAmountValue, { color: colors.danger }]}>
+                                +{formatCurrency(sale.totalAmount)}
+                              </Text>
+                              <SymbolView
+                                name={{
+                                  ios: isExpanded ? 'chevron.up' : 'chevron.down',
+                                  android: isExpanded ? 'expand_less' : 'expand_more',
+                                  web: isExpanded ? 'expand_less' : 'expand_more',
+                                }}
+                                tintColor={colors.tabIconDefault}
+                                size={14}
+                                style={styles.arrowIcon}
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        </View>
+                        {isExpanded ? <SaleItemsList sale={sale} /> : null}
+                      </GlassView>
+                    );
+                  })
+                )}
               </View>
+            )}
 
-              <View className="flex-row justify-between">
-                <TouchableOpacity
-                  onPress={handleCopyBill}
-                  className="flex-1 flex-row items-center justify-center bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700/80 py-3.5 rounded-xl mr-2 active:scale-95"
-                >
-                  <SymbolView
-                    name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
-                    tintColor="#4F46E5"
-                    size={14}
-                  />
-                  <Text className="font-semibold text-xs text-slate-700 dark:text-slate-300 ml-1.5">
-                    Copy
-                  </Text>
-                </TouchableOpacity>
+            {/* Payments Tab Panel */}
+            {activeTab === 'payments' && (
+              <View>
+                {payments.length === 0 ? (
+                  <View style={styles.emptyPanel}>
+                    <SymbolView
+                      name={{ ios: 'indianrupeesign.square', android: 'payments', web: 'payments' }}
+                      tintColor={colors.tabIconDefault}
+                      size={44}
+                    />
+                    <Text style={[styles.emptyPanelText, { color: colors.tabIconDefault }]}>
+                      No payments recorded for this customer.
+                    </Text>
+                  </View>
+                ) : (
+                  payments.map((payment) => {
+                    const isSelected = selectedPaymentIds.has(payment.id);
+                    return (
+                      <GlassView
+                        key={payment.id}
+                        style={styles.paymentRowContainer}
+                        borderRadius={16}
+                      >
+                        <View style={styles.paymentCheckboxRow}>
+                          <TouchableOpacity
+                            onPress={() => togglePaymentSelection(payment.id)}
+                            style={styles.checkboxContainer}
+                          >
+                            <SymbolView
+                              name={{
+                                ios: isSelected ? 'checkmark.circle.fill' : 'circle',
+                                android: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                web: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                              }}
+                              tintColor={isSelected ? colors.tint : colors.tabIconDefault}
+                              size={18}
+                            />
+                          </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={handleSendSMS}
-                  className="flex-1 flex-row items-center justify-center bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700/80 py-3.5 rounded-xl mx-1 active:scale-95"
-                >
-                  <SymbolView
-                    name={{ ios: 'message.fill', android: 'sms', web: 'sms' }}
-                    tintColor="#4F46E5"
-                    size={14}
-                  />
-                  <Text className="font-semibold text-xs text-slate-700 dark:text-slate-300 ml-1.5">
-                    Send SMS
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleShareBill}
-                  className="flex-1 flex-row items-center justify-center bg-indigo-600 dark:bg-indigo-500 py-3.5 rounded-xl ml-2 active:scale-95 shadow-sm shadow-indigo-600/10"
-                >
-                  <SymbolView
-                    name={{ ios: 'square.and.arrow.up.fill', android: 'share', web: 'share' }}
-                    tintColor="#FFFFFF"
-                    size={14}
-                  />
-                  <Text className="font-bold text-xs text-white ml-1.5">
-                    Share
-                  </Text>
-                </TouchableOpacity>
+                          <View style={styles.paymentDetailsRow}>
+                            <View style={styles.paymentDetailsLeft}>
+                              <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                                Payment — {payment.date}
+                              </Text>
+                              {payment.notes && (
+                                <Text style={[styles.transactionNotes, { color: colors.tabIconDefault }]}>
+                                  {payment.notes}
+                                </Text>
+                              )}
+                              {payment.discount > 0 && (
+                                <Text style={[styles.discountTagText, { color: colors.success }]}>
+                                  Discount Applied: {formatCurrency(payment.discount)}
+                                </Text>
+                              )}
+                            </View>
+                            <Text style={[styles.paymentAmountText, { color: colors.success }]}>
+                              -{formatCurrency(payment.amount)}
+                            </Text>
+                          </View>
+                        </View>
+                      </GlassView>
+                    );
+                  })
+                )}
               </View>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+            )}
 
-      {/* Sticky Bottom Comfort Zone CTAs */}
-      <View
-        className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-800/95 border-t border-slate-200 dark:border-slate-800 px-6 py-4 flex-row justify-between backdrop-blur-md"
-        style={{ paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
-      >
-        <TouchableOpacity
-          className="flex-1 bg-emerald-600 dark:bg-emerald-500 py-3.5 rounded-xl flex-row justify-center items-center active:scale-[0.98] mr-2 shadow-sm shadow-emerald-600/10"
-          onPress={() => router.push(`/payments/new?customerId=${customer.id}`)}
-        >
-          <Text className="text-white font-bold text-sm">Record Payment</Text>
-        </TouchableOpacity>
+            {/* Bill Generation Tab Panel */}
+            {activeTab === 'bill' && (
+              <View>
+                <GlassView style={styles.billPreviewCard}>
+                  <Text style={[styles.billPreviewSub, { color: colors.tabIconDefault }]}>
+                    Preview Message ({selectedSaleIds.size + selectedPaymentIds.size} transactions)
+                  </Text>
+                  <Text style={[styles.billTextContent, { color: colors.text }]}>
+                    {billText}
+                  </Text>
+                </GlassView>
 
-        <TouchableOpacity
-          className="flex-1 bg-indigo-600 dark:bg-indigo-500 py-3.5 rounded-xl flex-row justify-center items-center active:scale-[0.98] ml-2 shadow-sm shadow-indigo-600/10"
-          onPress={() => router.push(`/sales/new?customerId=${customer.id}`)}
+                <View style={styles.billActionsRow}>
+                  <TouchableOpacity
+                    onPress={handleCopyBill}
+                    style={[styles.billActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <SymbolView
+                      name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
+                      tintColor={colors.tint}
+                      size={14}
+                    />
+                    <Text style={[styles.billActionBtnText, { color: colors.text }]}>
+                      Copy
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleSendSMS}
+                    style={[styles.billActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <SymbolView
+                      name={{ ios: 'message.fill', android: 'sms', web: 'sms' }}
+                      tintColor={colors.tint}
+                      size={14}
+                    />
+                    <Text style={[styles.billActionBtnText, { color: colors.text }]}>
+                      Send SMS
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleShareBill}
+                    style={[styles.billActionBtnPrimary, { backgroundColor: colors.tint }]}
+                  >
+                    <SymbolView
+                      name={{ ios: 'square.and.arrow.up.fill', android: 'share', web: 'share' }}
+                      tintColor="#FFFFFF"
+                      size={14}
+                    />
+                    <Text style={styles.billActionBtnTextPrimary}>
+                      Share
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Sticky Bottom Actions Comfort Zone CTAs */}
+        <GlassView
+          style={[styles.stickyFooter, { paddingBottom: Platform.OS === 'ios' ? insets.bottom + 8 : 16 }]}
+          borderRadius={0}
+          borderColor="transparent"
+          backgroundColor={colorScheme === 'dark' ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.92)'}
         >
-          <Text className="text-white font-bold text-sm">New Sale</Text>
-        </TouchableOpacity>
+          <View style={styles.footerActions}>
+            <TouchableOpacity
+              style={[styles.footerBtn, { backgroundColor: colors.accent }]}
+              onPress={() => router.push(`/ledger/new-payment?customerId=${customer.id}`)}
+            >
+              <Text style={styles.footerBtnText}>Record Payment</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.footerBtn, { backgroundColor: colors.tint }]}
+              onPress={() => router.push(`/ledger/new-sale?customerId=${customer.id}`)}
+            >
+              <Text style={styles.footerBtnText}>New Sale</Text>
+            </TouchableOpacity>
+          </View>
+        </GlassView>
       </View>
-    </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 110,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  errorSub: {
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  profileCard: {
+    padding: 20,
+    marginBottom: 16,
+  },
+  profileHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  profileTextCol: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  clientName: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  clientPhone: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  clientPhoneNo: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  balanceCol: {
+    alignItems: 'flex-end',
+  },
+  balanceLabel: {
+    fontSize: 9,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  balanceValue: {
+    fontSize: 22,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  addressBox: {
+    marginTop: 16,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  addressIcon: {
+    marginTop: 2,
+  },
+  addressText: {
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    marginTop: 16,
+  },
+  quickActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginHorizontal: 4,
+  },
+  quickActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  selectionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  selectAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  selectAllText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  selectedCountText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    marginBottom: 16,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabButtonText: {
+    fontSize: 13,
+  },
+  tabContentContainer: {
+    marginTop: 4,
+  },
+  emptyPanel: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyPanelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  saleRowContainer: {
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  saleRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  checkboxContainer: {
+    padding: 6,
+    marginRight: 6,
+  },
+  saleRowClickable: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  saleDetailsCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  transactionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  transactionNotes: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  saleAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  saleAmountValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginRight: 8,
+  },
+  arrowIcon: {
+    marginTop: 1,
+  },
+  paymentRowContainer: {
+    marginBottom: 10,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  paymentCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentDetailsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paymentDetailsLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  discountTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  paymentAmountText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  billPreviewCard: {
+    padding: 20,
+    marginBottom: 16,
+  },
+  billPreviewSub: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  billTextContent: {
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    lineHeight: 20,
+  },
+  billActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  billActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  billActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  billActionBtnPrimary: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  billActionBtnTextPrimary: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+    marginLeft: 4,
+  },
+  stickyFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.15)',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 4,
+  },
+  footerBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  emptyItemsContainer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+  },
+  itemsContainer: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+  },
+  itemRowLeft: {
+    flex: 1,
+  },
+  itemRowName: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  itemRowMeta: {
+    fontSize: 9,
+    marginTop: 1,
+  },
+  itemRowTotal: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontWeight: '700',
+  },
+});

@@ -11,6 +11,7 @@ import { useNetInfo } from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { useColorScheme as useNativeWindColorScheme } from 'nativewind';
 import { database } from '../db';
 import { useAppStore } from '../store/app';
 import { runSync, setupSyncTriggers } from '../lib/sync';
@@ -53,6 +54,8 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const { setColorScheme } = useNativeWindColorScheme();
+  const themeSetting = useAppStore((state) => state.themeSetting);
   const initStore = useAppStore((state) => state.initStore);
   const insets = useSafeAreaInsets();
   const netInfo = useNetInfo();
@@ -70,6 +73,10 @@ function RootLayoutNav() {
         },
       })
   );
+
+  useEffect(() => {
+    setColorScheme(themeSetting);
+  }, [themeSetting, setColorScheme]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;

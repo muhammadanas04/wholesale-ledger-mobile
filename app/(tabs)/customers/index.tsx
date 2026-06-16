@@ -7,59 +7,82 @@ import {
   RefreshControl,
   SafeAreaView,
   Pressable,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';
 import Toast from 'react-native-toast-message';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Customer from '../../../db/models/Customer';
 import { useQuery } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { GlassView } from '../../../components/GlassView';
+import { ScreenBackground } from '../../../components/ScreenBackground';
 
-const getBalanceStyle = (balance: number) => {
-  if (balance > 0) return 'text-rose-600 dark:text-rose-400 font-semibold';
-  if (balance === 0) return 'text-emerald-600 dark:text-emerald-400 font-semibold';
-  return 'text-amber-600 dark:text-amber-400 font-semibold';
-};
-
-// Extracted Row Item component to allow FlashList optimal recycling
+// Extracted Row Item component
 function CustomerRow({ item }: { item: Customer }) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+
   return (
     <Link href={`/customers/${item.id}`} asChild>
-      <Pressable className="flex-row justify-between items-center bg-white dark:bg-slate-800 px-5 py-4 border-b border-slate-100 dark:border-slate-800/40 active:bg-slate-50 dark:active:bg-slate-700/30">
-        <View className="flex-1 pr-4">
-          <Text className="text-base font-bold text-slate-900 dark:text-slate-50" numberOfLines={1}>
-            {item.name}
-          </Text>
-          {item.phone ? (
-            <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 font-mono">
-              {item.phone}
-            </Text>
-          ) : null}
-        </View>
-        <View className="items-end">
-          <Text className={`text-base font-mono ${getBalanceStyle(item.balance)}`}>
-            {formatCurrency(item.balance)}
-          </Text>
-          <Text className="text-slate-300 dark:text-slate-600 text-[10px] uppercase font-bold mt-0.5">
-            {item.synced === 1 ? 'Synced' : 'Pending'}
-          </Text>
-        </View>
+      <Pressable>
+        {({ pressed }) => (
+          <GlassView
+            style={[
+              styles.row,
+              {
+                borderColor: colors.border,
+                backgroundColor: pressed
+                  ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.95)')
+                  : colors.surface,
+              }
+            ]}
+            borderRadius={20}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={[styles.nameText, { color: colors.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              {item.phone && (
+                <Text style={[styles.phoneText, { color: colors.tabIconDefault }]}>
+                  {item.phone}
+                </Text>
+              )}
+            </View>
+            <View style={styles.rowRight}>
+              <Text
+                style={[
+                  styles.balanceText,
+                  { color: item.balance > 0 ? colors.danger : colors.success }
+                ]}
+              >
+                {formatCurrency(item.balance)}
+              </Text>
+              <Text style={[styles.syncText, { color: colors.tabIconDefault }]}>
+                {item.synced === 1 ? 'Synced' : 'Pending'}
+              </Text>
+            </View>
+          </GlassView>
+        )}
       </Pressable>
     </Link>
   );
 }
 
-// Stably defined renderItem outside component body to avoid recreating on each render
-const renderItem = ({ item }: { item: Customer }) => {
-  return <CustomerRow item={item} />;
-};
-
 export default function CustomerListScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -111,77 +134,183 @@ export default function CustomerListScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-      {/* Search Header */}
-      <View className="px-5 pt-4 pb-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/50 shadow-sm">
-        <View className="flex-row items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2">
-          <SymbolView
-            name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-            tintColor="#94A3B8"
-            size={18}
-          />
-          <TextInput
-            className="flex-1 ml-3 text-slate-900 dark:text-slate-50 text-sm py-1.5"
-            placeholder="Search by name or phone..."
-            placeholderTextColor="#94A3B8"
-            value={inputText}
-            onChangeText={setInputText}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-          />
-          {inputText ? (
-            <TouchableOpacity onPress={() => setInputText('')} className="p-1">
-              <SymbolView
-                name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
-                tintColor="#94A3B8"
-                size={16}
-              />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Customers List */}
-      <FlashList
-        data={customers}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        estimatedItemSize={72}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
-        }
-        ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20 px-8">
+    <ScreenBackground>
+      {/* Set padding top for safe area in custom stack headers */}
+      <View style={styles.rootContainer}>
+        {/* Search Header */}
+        <View style={styles.searchHeader}>
+          <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <SymbolView
-              name={{ ios: 'person.crop.circle.badge.questionmark', android: 'person_search', web: 'person_search' }}
-              tintColor="#CBD5E1"
-              size={64}
+              name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+              tintColor={colors.tabIconDefault}
+              size={16}
             />
-            <Text className="text-slate-700 dark:text-slate-300 font-bold text-lg mt-4 text-center">
-              {searchQuery ? 'No Results Found' : 'No customers yet.'}
-            </Text>
-            <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center max-w-[260px]">
-              {searchQuery
-                ? `We couldn't find any customer matching "${searchQuery}".`
-                : 'Tap + to add one.'}
-            </Text>
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search customers by name or phone..."
+              placeholderTextColor={colors.tabIconDefault}
+              value={inputText}
+              onChangeText={setInputText}
+              autoCorrect={false}
+            />
+            {inputText ? (
+              <TouchableOpacity onPress={() => setInputText('')} style={styles.clearBtn}>
+                <SymbolView
+                  name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
+                  tintColor={colors.tabIconDefault}
+                  size={16}
+                />
+              </TouchableOpacity>
+            ) : null}
           </View>
-        }
-      />
+        </View>
 
-      {/* Floating Action Button */}
-      <Link href="/customers/new" asChild>
-        <TouchableOpacity
-          className="absolute bottom-6 right-6 h-14 w-14 rounded-full bg-indigo-600 dark:bg-indigo-500 shadow-lg items-center justify-center active:scale-95"
-          style={{ shadowColor: '#4F46E5', shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
-        >
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            tintColor="#FFFFFF"
-            size={24}
-          />
-        </TouchableOpacity>
-      </Link>
-    </SafeAreaView>
+        {/* Customers List */}
+        <FlashList
+          data={customers}
+          renderItem={({ item }) => <CustomerRow item={item} />}
+          keyExtractor={(item) => item.id}
+          estimatedItemSize={76}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <SymbolView
+                name={{ ios: 'person.crop.circle.badge.questionmark', android: 'person_search', web: 'person_search' }}
+                tintColor={colors.tabIconDefault}
+                size={48}
+              />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {searchQuery ? 'No Results Found' : 'No customers yet.'}
+              </Text>
+              <Text style={[styles.emptySub, { color: colors.tabIconDefault }]}>
+                {searchQuery
+                  ? `We couldn't find any customer matching "${searchQuery}".`
+                  : 'Tap + to add one.'}
+              </Text>
+            </View>
+          }
+        />
+
+        {/* Floating Action Button */}
+        <Link href="/customers/new" asChild>
+          <TouchableOpacity
+            style={[
+              styles.fab,
+              { 
+                backgroundColor: colors.tint, 
+                shadowColor: colors.tint,
+                bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80 
+              }
+            ]}
+            activeOpacity={0.8}
+          >
+            <SymbolView
+              name={{ ios: 'plus', android: 'add', web: 'add' }}
+              tintColor="#FFFFFF"
+              size={22}
+            />
+          </TouchableOpacity>
+        </Link>
+      </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
+  searchHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    paddingVertical: 10,
+  },
+  clearBtn: {
+    padding: 2,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 110, // clear floating tab dock
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  rowLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  nameText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  phoneText: {
+    fontSize: 11,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  rowRight: {
+    alignItems: 'flex-end',
+  },
+  balanceText: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  syncText: {
+    fontSize: 8,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  emptySub: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    height: 54,
+    width: 54,
+    borderRadius: 27,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

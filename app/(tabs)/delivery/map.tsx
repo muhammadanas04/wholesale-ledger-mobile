@@ -173,7 +173,7 @@ export default function LiveMapScreen() {
     <View className="flex-1 relative">
       {/* Floating Header Panel */}
       <View
-        style={{ paddingTop: insets.top + 10 }}
+        style={{ paddingTop: 10 }}
         className="absolute top-0 left-4 right-4 z-10"
       >
         <View className="bg-white/95 dark:bg-slate-800/95 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-lg flex-row justify-between items-center backdrop-blur-md">

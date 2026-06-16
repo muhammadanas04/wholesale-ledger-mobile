@@ -44,6 +44,7 @@ export function useRecord<T extends Model>(record: T): T {
 export function useRelation<T extends Model>(relation: Relation<T> | null | undefined): T | null {
   const [value, setValue] = useState<T | null>(null);
   const [, setTick] = useState(0);
+  const relationId = relation?.id;
 
   useEffect(() => {
     if (!relation) {
@@ -55,7 +56,7 @@ export function useRelation<T extends Model>(relation: Relation<T> | null | unde
       setTick((t) => t + 1);
     });
     return () => subscription.unsubscribe();
-  }, [relation]);
+  }, [relationId]);
 
   return value;
 }

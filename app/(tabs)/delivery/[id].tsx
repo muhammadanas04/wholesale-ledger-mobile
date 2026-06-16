@@ -6,10 +6,13 @@ import {
   ActivityIndicator,
   SafeAreaView,
   RefreshControl,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Driver from '../../../db/models/Driver';
@@ -18,76 +21,95 @@ import DeliveryItem from '../../../db/models/DeliveryItem';
 import { useQuery, useRelation } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { GlassView } from '../../../components/GlassView';
+import { ScreenBackground } from '../../../components/ScreenBackground';
 
-// Subcomponent to render each Stop/DeliveryItem row reactively, joining Customer relation if linked
+// Subcomponent to render each Stop/DeliveryItem row reactively
 function StopRowItem({ item, index }: { item: DeliveryItem; index: number }) {
   const customer = useRelation(item.customer);
   const isDone = item.status === 'done';
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
 
   return (
-    <View className="flex-row items-start bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-800/40 mb-3 shadow-sm">
-      {/* Read-only status checkbox indicator representing driver progress */}
-      <View className="mr-3 mt-1">
+    <GlassView
+      style={[
+        styles.stopRow,
+        {
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        }
+      ]}
+      borderRadius={16}
+    >
+      {/* Read-only status checkbox indicator */}
+      <View style={styles.checkboxWrapper}>
         <SymbolView
           name={
             isDone
               ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
               : { ios: 'circle', android: 'radio_button_unchecked', web: 'radio_button_unchecked' }
           }
-          tintColor={isDone ? '#10B981' : '#94A3B8'}
+          tintColor={isDone ? colors.success : colors.tabIconDefault}
           size={22}
         />
       </View>
 
-      <View className="flex-1">
-        <View className="flex-row justify-between items-center mb-1">
-          <Text className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">
+      <View style={styles.stopDetails}>
+        <View style={styles.stopHeaderRow}>
+          <Text style={[styles.stopLabel, { color: colors.tabIconDefault }]}>
             STOP #{index + 1}
           </Text>
-          <View className={`px-2 py-0.5 rounded-full ${isDone ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-amber-50 dark:bg-amber-950/40'}`}>
-            <Text className={`text-[9px] font-bold uppercase ${isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+          <View style={[styles.badge, { backgroundColor: isDone ? (colorScheme === 'dark' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(209, 250, 229, 0.6)') : (colorScheme === 'dark' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(254, 243, 199, 0.6)') }]}>
+            <Text style={[styles.badgeText, { color: isDone ? colors.success : colors.warning }]}>
               {isDone ? 'Delivered' : 'Pending'}
             </Text>
           </View>
         </View>
 
-        <Text className="text-sm font-bold text-slate-850 dark:text-slate-100 mb-1">
+        <Text style={[styles.stopAddress, { color: colors.text }]}>
           {item.address}
         </Text>
 
-        <View className="flex-row items-center mt-1">
+        <View style={styles.stopMeta}>
           <SymbolView
             name={{ ios: 'cube.box.fill', android: 'inventory_2', web: 'inventory_2' }}
-            tintColor="#64748B"
+            tintColor={colors.tabIconDefault}
             size={12}
           />
-          <Text className="text-xs text-slate-500 dark:text-slate-400 font-semibold ml-1.5">
+          <Text style={[styles.stopMetaText, { color: colors.tabIconDefault }]}>
             {item.stockAmount}
           </Text>
         </View>
 
-        {customer ? (
-          <View className="flex-row items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/40">
+        {customer && (
+          <View style={[styles.stopLink, { borderTopColor: colors.border }]}>
             <SymbolView
               name={{ ios: 'person.crop.circle.fill', android: 'person', web: 'person' }}
-              tintColor="#4F46E5"
+              tintColor={colors.tint}
               size={12}
             />
-            <Text className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 ml-1.5">
+            <Text style={[styles.stopLinkText, { color: colors.tint }]}>
               Client: {customer.name}
             </Text>
-            <Text className="text-[10px] text-slate-400 font-mono ml-2">
+            <Text style={[styles.stopLinkBal, { color: colors.tabIconDefault }]}>
               (Bal: {formatCurrency(customer.balance)})
             </Text>
           </View>
-        ) : null}
+        )}
       </View>
-    </View>
+    </GlassView>
   );
 }
 
 export default function DeliveryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [, setTick] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -146,11 +168,20 @@ export default function DeliveryDetailScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400';
+        return {
+          bg: colorScheme === 'dark' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(209, 250, 229, 0.6)',
+          text: colors.success,
+        };
       case 'in_progress':
-        return 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400';
+        return {
+          bg: colorScheme === 'dark' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(224, 242, 254, 0.6)',
+          text: colors.accent,
+        };
       default:
-        return 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400';
+        return {
+          bg: colorScheme === 'dark' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(254, 243, 199, 0.6)',
+          text: colors.warning,
+        };
     }
   };
 
@@ -183,113 +214,319 @@ export default function DeliveryDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-slate-50 dark:bg-slate-900">
-        <ActivityIndicator size="large" color="#4F46E5" />
-      </View>
+      <ScreenBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+        </View>
+      </ScreenBackground>
     );
   }
 
   if (!delivery) {
     return (
-      <View className="flex-1 justify-center items-center bg-slate-50 dark:bg-slate-900 px-6">
-        <Text className="text-lg font-bold text-slate-800 dark:text-slate-100">Task Not Found</Text>
-        <Text className="text-slate-400 dark:text-slate-500 text-sm mt-1 text-center">
-          The selected delivery route record does not exist or has been removed.
-        </Text>
-      </View>
+      <ScreenBackground>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorTitle, { color: colors.text }]}>Task Not Found</Text>
+          <Text style={[styles.errorSub, { color: colors.tabIconDefault }]}>
+            The selected delivery route record does not exist or has been removed.
+          </Text>
+        </View>
+      </ScreenBackground>
     );
   }
 
+  const statusStyle = getStatusColor(delivery.status);
+
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
-        }
-        className="flex-1 px-5 py-6"
-      >
-        {/* Header/Driver Info Card */}
-        <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm mb-5">
-          <View className="flex-row justify-between items-start mb-3">
-            <View className="flex-1 pr-3">
-              <Text className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] font-bold">
-                Assigned Driver
-              </Text>
-              <Text className="text-xl font-bold text-slate-900 dark:text-slate-50 mt-1">
-                {driver ? driver.name : 'Loading driver details...'}
-              </Text>
-              {driver?.phone ? (
-                <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 font-mono">
-                  {driver.phone}
+    <ScreenBackground>
+      {/* Set padding top for safe area in custom stack headers */}
+      <View style={styles.rootContainer}>
+        <ScrollView
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+          }
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Header/Driver Info Card */}
+          <GlassView style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.headerTextContainer}>
+                <Text style={[styles.cardLabel, { color: colors.tabIconDefault }]}>
+                  Assigned Driver
                 </Text>
-              ) : null}
+                <Text style={[styles.driverName, { color: colors.text }]}>
+                  {driver ? driver.name : 'Loading driver details...'}
+                </Text>
+                {driver?.phone && (
+                  <Text style={[styles.driverPhone, { color: colors.tabIconDefault }]}>
+                    {driver.phone}
+                  </Text>
+                )}
+              </View>
+
+              <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                  {getStatusLabel(delivery.status)}
+                </Text>
+              </View>
             </View>
 
-            <View className={`px-2.5 py-1 rounded-full ${getStatusColor(delivery.status)}`}>
-              <Text className="text-[10px] font-bold uppercase">
-                {getStatusLabel(delivery.status)}
+            <Text style={[styles.dispatchedText, { color: colors.tabIconDefault, borderTopColor: colors.border }]}>
+              Dispatched: {formattedDate}
+            </Text>
+          </GlassView>
+
+          {/* Dynamic Route Progress Card */}
+          <GlassView style={styles.card}>
+            <View style={styles.progressHeader}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>
+                Route Progress
+              </Text>
+              <Text style={[styles.progressPercent, { color: colors.tint }]}>
+                {progressStats.percent}% Done
               </Text>
             </View>
-          </View>
-
-          <Text className="text-slate-400 dark:text-slate-550 text-[10px] font-mono mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/40">
-            Dispatched: {formattedDate}
-          </Text>
-        </View>
-
-        {/* Dynamic Route Progress Card */}
-        <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm mb-5">
-          <View className="flex-row justify-between items-center mb-2">
-            <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">
-              Route Progress
+            
+            <Text style={[styles.progressStopsText, { color: colors.tabIconDefault }]}>
+              {progressStats.completed} of {progressStats.total} stops completed
             </Text>
-            <Text className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-              {progressStats.percent}% Done
-            </Text>
-          </View>
-          
-          <Text className="text-xs text-slate-450 dark:text-slate-400">
-            {progressStats.completed} of {progressStats.total} stops completed
-          </Text>
 
-          {/* Custom Dynamic Progress Bar Track */}
-          <View className="h-2 w-full bg-slate-100 dark:bg-slate-900 rounded-full mt-4 overflow-hidden border border-slate-200/50 dark:border-slate-850">
-            <View
-              className="h-full bg-indigo-600 dark:bg-indigo-500 rounded-full"
-              style={{ width: `${progressStats.percent}%` }}
-            />
-          </View>
-        </View>
-
-        {delivery.notes ? (
-          <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm mb-5">
-            <Text className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-2">
-              Dispatch Instructions
-            </Text>
-            <Text className="text-sm text-slate-700 dark:text-slate-350 leading-5">
-              {delivery.notes}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Stops Checklist Section */}
-        <Text className="text-slate-800 dark:text-slate-100 font-bold text-base mb-3.5 mt-1">
-          Stops Checklist
-        </Text>
-
-        <View className="pb-8">
-          {stops.length === 0 ? (
-            <View className="bg-white dark:bg-slate-800 rounded-2xl py-8 px-6 items-center justify-center border border-slate-100 dark:border-slate-800/40">
-              <Text className="text-xs text-slate-400 dark:text-slate-500">No stops associated with this delivery.</Text>
+            {/* Custom Dynamic Progress Bar Track */}
+            <View style={[styles.progressBarTrack, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <View
+                style={[styles.progressBarFill, { backgroundColor: colors.tint, width: `${progressStats.percent}%` }]}
+              />
             </View>
-          ) : (
-            stops.map((stop, index) => (
-              <StopRowItem key={stop.id} item={stop} index={index} />
-            ))
-          )}
-        </View>
+          </GlassView>
 
-      </ScrollView>
-    </SafeAreaView>
+          {delivery.notes && (
+            <GlassView style={styles.card}>
+              <Text style={[styles.cardLabel, { color: colors.tabIconDefault, marginBottom: 8 }]}>
+                Dispatch Instructions
+              </Text>
+              <Text style={[styles.instructionsText, { color: colors.text }]}>
+                {delivery.notes}
+              </Text>
+            </GlassView>
+          )}
+
+          {/* Stops Checklist Section */}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Stops Checklist
+          </Text>
+
+          <View style={styles.stopsListContainer}>
+            {stops.length === 0 ? (
+              <GlassView style={styles.emptyCard}>
+                <Text style={{ color: colors.tabIconDefault, fontSize: 12 }}>No stops associated with this delivery.</Text>
+              </GlassView>
+            ) : (
+              stops.map((stop, index) => (
+                <StopRowItem key={stop.id} item={stop} index={index} />
+              ))
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  errorSub: {
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  card: {
+    padding: 20,
+    marginBottom: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  headerTextContainer: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  cardLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  driverName: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  driverPhone: {
+    fontSize: 12,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  dispatchedText: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  progressPercent: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  progressStopsText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  progressBarTrack: {
+    height: 8,
+    width: '100%',
+    borderRadius: 4,
+    marginTop: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  instructionsText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  stopsListContainer: {
+    marginBottom: 24,
+  },
+  emptyCard: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 10,
+  },
+  checkboxWrapper: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  stopDetails: {
+    flex: 1,
+  },
+  stopHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  stopLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  stopAddress: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  stopMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  stopMetaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  stopLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  stopLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  stopLinkBal: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginLeft: 6,
+  },
+});

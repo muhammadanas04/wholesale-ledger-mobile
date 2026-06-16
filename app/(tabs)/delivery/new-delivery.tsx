@@ -11,12 +11,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import Toast from 'react-native-toast-message';
 import * as Crypto from 'expo-crypto';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Driver from '../../../db/models/Driver';
@@ -26,36 +28,10 @@ import DeliveryItem from '../../../db/models/DeliveryItem';
 import { useQuery } from '../../../db/hooks';
 import { formatCurrency } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
-
-const DriverListItem = React.memo(({ item, onPress }: { item: Driver; onPress: (d: Driver) => void }) => (
-  <TouchableOpacity
-    onPress={() => onPress(item)}
-    className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
-  >
-    <View className="flex-1 pr-4">
-      <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}</Text>
-      <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.phone}</Text>
-    </View>
-    <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor="#CBD5E1" size={16} />
-  </TouchableOpacity>
-));
-
-const CustomerListItem = React.memo(({ item, onPress }: { item: Customer; onPress: (c: Customer) => void }) => (
-  <TouchableOpacity
-    onPress={() => onPress(item)}
-    className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/30 bg-white dark:bg-slate-800 flex-row justify-between items-center active:bg-slate-50 dark:active:bg-slate-700/20"
-  >
-    <View className="flex-1 pr-4">
-      <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">{item.name}</Text>
-      {item.phone ? (
-        <Text className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{item.phone}</Text>
-      ) : null}
-    </View>
-    <Text className="text-xs font-mono font-bold text-slate-550 dark:text-slate-400">
-      Bal: {formatCurrency(item.balance)}
-    </Text>
-  </TouchableOpacity>
-));
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { GlassView } from '../../../components/GlassView';
+import { ScreenBackground } from '../../../components/ScreenBackground';
 
 interface StopItem {
   id: string;
@@ -65,6 +41,10 @@ interface StopItem {
 }
 
 export default function NewDeliveryScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [stops, setStops] = useState<StopItem[]>([]);
@@ -181,7 +161,6 @@ export default function NewDeliveryScreen() {
       return;
     }
 
-    // Stop-level checks
     for (let i = 0; i < stops.length; i++) {
       const stop = stops[i];
       if (!stop.address.trim()) {
@@ -207,7 +186,6 @@ export default function NewDeliveryScreen() {
       const deliveryId = Crypto.randomUUID();
       const timestamp = new Date().toISOString();
 
-      // Write atomically to SQLite
       await database.write(async () => {
         // 1. Create Delivery header
         await database.collections.get<Delivery>('deliveries').create((del) => {
@@ -243,7 +221,6 @@ export default function NewDeliveryScreen() {
         text2: `Assigned successfully to ${selectedDriver.name}.`,
       });
 
-      // Background synchronization
       runSync(database).catch((err) => {
         console.error('Post delivery creation sync failed:', err);
       });
@@ -262,326 +239,665 @@ export default function NewDeliveryScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
-    >
-      <ScrollView contentContainerStyle={{ paddingBottom: 110 }} className="flex-1 px-5 py-6">
-        
-        {/* Driver Selection Card */}
-        <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm mb-5">
-          <Text className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-2">
-            Assigned Driver *
-          </Text>
+    <ScreenBackground>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scrollView}>
+          
+          {/* Driver Selection Card */}
+          <GlassView style={styles.card}>
+            <Text style={[styles.cardSub, { color: colors.tabIconDefault }]}>
+              Assigned Driver *
+            </Text>
 
-          {selectedDriver ? (
-            <View className="flex-row justify-between items-center mt-1">
-              <View className="flex-1 pr-4">
-                <Text className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                  {selectedDriver.name}
-                </Text>
-                <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 font-mono">
-                  {selectedDriver.phone}
-                </Text>
+            {selectedDriver ? (
+              <View style={styles.headerRow}>
+                <View style={styles.textContainer}>
+                  <Text style={[styles.driverName, { color: colors.text }]}>
+                    {selectedDriver.name}
+                  </Text>
+                  <Text style={[styles.driverPhone, { color: colors.tabIconDefault }]}>
+                    {selectedDriver.phone}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setDriverModalVisible(true)}
+                  style={[styles.changeBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.changeBtnText, { color: colors.tint }]}>
+                    Change
+                  </Text>
+                </TouchableOpacity>
               </View>
+            ) : (
               <TouchableOpacity
                 onPress={() => setDriverModalVisible(true)}
-                className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg active:scale-95"
+                style={[styles.chooseBtn, { borderColor: colors.border }]}
               >
-                <Text className="text-indigo-600 dark:text-indigo-400 text-xs font-bold">
-                  Change
+                <SymbolView
+                  name={{ ios: 'person.badge.plus.fill', android: 'person_add', web: 'person_add' }}
+                  tintColor={colors.tint}
+                  size={20}
+                />
+                <Text style={[styles.chooseBtnText, { color: colors.tint }]}>
+                  Choose Driver
+                </Text>
+              </TouchableOpacity>
+            )}
+          </GlassView>
+
+          {/* General Delivery Notes Card */}
+          <GlassView style={styles.card}>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>
+              Delivery Notes (Optional)
+            </Text>
+            <TextInput
+              style={[styles.notesInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+              placeholder="E.g., route directions, key handover remarks..."
+              placeholderTextColor={colors.tabIconDefault}
+              value={deliveryNotes}
+              onChangeText={setDeliveryNotes}
+              multiline
+              autoCapitalize="sentences"
+            />
+          </GlassView>
+
+          {/* Stops/Tasks List Card */}
+          <GlassView style={styles.card}>
+            <View style={styles.itemsHeader}>
+              <Text style={[styles.itemsTitle, { color: colors.text }]}>
+                Route Stops
+              </Text>
+              <TouchableOpacity
+                onPress={handleAddStop}
+                style={[
+                  styles.addItemBtn,
+                  { backgroundColor: colorScheme === 'dark' ? 'rgba(45, 212, 191, 0.12)' : 'rgba(13, 148, 136, 0.06)' }
+                ]}
+              >
+                <SymbolView
+                  name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
+                  tintColor={colors.tint}
+                  size={16}
+                />
+                <Text style={[styles.addItemBtnText, { color: colors.tint }]}>
+                  Add Stop
                 </Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setDriverModalVisible(true)}
-              className="border-2 border-dashed border-slate-200 dark:border-slate-850 py-6 rounded-xl justify-center items-center flex-row active:scale-[0.98]"
-            >
-              <SymbolView
-                name={{ ios: 'person.badge.plus.fill', android: 'person_add', web: 'person_add' }}
-                tintColor="#4F46E5"
-                size={20}
-              />
-              <Text className="text-indigo-600 dark:text-indigo-400 font-bold text-sm ml-2">
-                Choose Driver
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        {/* General Delivery Notes Card */}
-        <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm mb-5">
-          <Text className="text-slate-800 dark:text-slate-100 font-bold text-sm mb-2">
-            Delivery Notes (Optional)
-          </Text>
-          <TextInput
-            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-50 text-sm min-h-[60px]"
-            placeholder="E.g., route directions, key handover remarks..."
-            placeholderTextColor="#94A3B8"
-            value={deliveryNotes}
-            onChangeText={setDeliveryNotes}
-            multiline
-            autoCapitalize="sentences"
-          />
-        </View>
-
-        {/* Stops/Tasks List Card */}
-        <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm mb-5">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-slate-800 dark:text-slate-100 font-bold text-base">
-              Route Stops
-            </Text>
-            <TouchableOpacity
-              onPress={handleAddStop}
-              className="bg-indigo-50 dark:bg-indigo-950/40 px-3.5 py-2 rounded-xl flex-row items-center active:scale-95"
-            >
-              <SymbolView
-                name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-                tintColor="#4F46E5"
-                size={16}
-              />
-              <Text className="text-indigo-600 dark:text-indigo-400 font-bold text-xs ml-1.5">
-                Add Stop
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {stops.length === 0 ? (
-            <View className="py-10 items-center justify-center border-t border-slate-100 dark:border-slate-800/30">
-              <SymbolView
-                name={{ ios: 'mappin.and.ellipse', android: 'add_location', web: 'add_location' }}
-                tintColor="#CBD5E1"
-                size={40}
-              />
-              <Text className="text-slate-400 dark:text-slate-500 text-xs mt-3.5 text-center max-w-[200px]">
-                Add stops to plan the delivery layout stop-by-stop.
-              </Text>
-            </View>
-          ) : (
-            <View className="border-t border-slate-100 dark:border-slate-800/30 pt-4">
-              {stops.map((stop, index) => (
-                <View
-                  key={stop.id}
-                  className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl p-4 mb-4 last:mb-0 relative"
-                >
-                  <View className="flex-row justify-between items-center mb-3">
-                    <Text className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                      STOP #{index + 1}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => handleRemoveStop(stop.id)}
-                      className="p-1"
-                    >
-                      <SymbolView
-                        name={{ ios: 'trash.fill', android: 'delete', web: 'delete' }}
-                        tintColor="#EF4444"
-                        size={16}
-                      />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Stop Address */}
-                  <View className="mb-3">
-                    <Text className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase mb-1">
-                      Delivery Address *
-                    </Text>
-                    <TextInput
-                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-50 text-xs"
-                      placeholder="Enter destination address"
-                      placeholderTextColor="#94A3B8"
-                      value={stop.address}
-                      onChangeText={(val) => handleUpdateStop(stop.id, 'address', val)}
-                    />
-                  </View>
-
-                  {/* Stock Description */}
-                  <View className="mb-3">
-                    <Text className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase mb-1">
-                      Stock Details *
-                    </Text>
-                    <TextInput
-                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-50 text-xs"
-                      placeholder="E.g., 5 bags Rice, 1 tin Ghee"
-                      placeholderTextColor="#94A3B8"
-                      value={stop.stockAmount}
-                      onChangeText={(val) => handleUpdateStop(stop.id, 'stockAmount', val)}
-                    />
-                  </View>
-
-                  {/* Client Association */}
-                  <View className="mt-1 flex-row items-center justify-between border-t border-slate-200/50 dark:border-slate-800/60 pt-3">
-                    {stop.selectedCustomer ? (
-                      <View className="flex-1 flex-row items-center justify-between">
-                        <View className="flex-1 pr-2">
-                          <Text className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">
-                            Linked Client
-                          </Text>
-                          <Text className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5" numberOfLines={1}>
-                            {stop.selectedCustomer.name}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => handleUnlinkCustomer(stop.id)}
-                          className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/20 rounded-lg active:scale-95"
-                        >
-                          <Text className="text-rose-600 dark:text-rose-400 font-bold text-[10px]">
-                            Unlink
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
+            {stops.length === 0 ? (
+              <View style={[styles.emptyStopsContainer, { borderTopColor: colors.border }]}>
+                <SymbolView
+                  name={{ ios: 'mappin.and.ellipse', android: 'add_location', web: 'add_location' }}
+                  tintColor={colors.tabIconDefault}
+                  size={36}
+                />
+                <Text style={[styles.emptyStopsText, { color: colors.tabIconDefault }]}>
+                  Add stops to plan the delivery layout stop-by-stop.
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.stopsListContainer, { borderTopColor: colors.border }]}>
+                {stops.map((stop, index) => (
+                  <View
+                    key={stop.id}
+                    style={[styles.stopBlock, { backgroundColor: colors.background, borderColor: colors.border }]}
+                  >
+                    <View style={styles.stopHeader}>
+                      <Text style={[styles.stopTitle, { color: colors.tabIconDefault }]}>
+                        STOP #{index + 1}
+                      </Text>
                       <TouchableOpacity
-                        onPress={() => handleOpenCustomerModal(stop.id)}
-                        className="flex-row items-center active:scale-95 py-1"
+                        onPress={() => handleRemoveStop(stop.id)}
+                        style={styles.deleteBtn}
                       >
                         <SymbolView
-                          name={{ ios: 'link.badge.plus', android: 'link', web: 'link' }}
-                          tintColor="#4F46E5"
-                          size={14}
+                          name={{ ios: 'trash.fill', android: 'delete', web: 'delete' }}
+                          tintColor={colors.danger}
+                          size={16}
                         />
-                        <Text className="text-indigo-600 dark:text-indigo-400 font-bold text-xs ml-1.5">
-                          Link Customer Account
-                        </Text>
                       </TouchableOpacity>
-                    )}
+                    </View>
+
+                    {/* Stop Address */}
+                    <View style={styles.stopInputGroup}>
+                      <Text style={[styles.stopInputLabel, { color: colors.tabIconDefault }]}>
+                        Delivery Address *
+                      </Text>
+                      <TextInput
+                        style={[styles.stopInput, { backgroundColor: colors.surfaceSolid, color: colors.text, borderColor: colors.border }]}
+                        placeholder="Enter destination address"
+                        placeholderTextColor={colors.tabIconDefault}
+                        value={stop.address}
+                        onChangeText={(val) => handleUpdateStop(stop.id, 'address', val)}
+                      />
+                    </View>
+
+                    {/* Stock Description */}
+                    <View style={styles.stopInputGroup}>
+                      <Text style={[styles.stopInputLabel, { color: colors.tabIconDefault }]}>
+                        Stock Details *
+                      </Text>
+                      <TextInput
+                        style={[styles.stopInput, { backgroundColor: colors.surfaceSolid, color: colors.text, borderColor: colors.border }]}
+                        placeholder="E.g., 5 bags Rice, 1 tin Ghee"
+                        placeholderTextColor={colors.tabIconDefault}
+                        value={stop.stockAmount}
+                        onChangeText={(val) => handleUpdateStop(stop.id, 'stockAmount', val)}
+                      />
+                    </View>
+
+                    {/* Client Association */}
+                    <View style={[styles.linkContainer, { borderTopColor: colors.border }]}>
+                      {stop.selectedCustomer ? (
+                        <View style={styles.linkHeader}>
+                          <View style={styles.linkedTextContainer}>
+                            <Text style={[styles.stopInputLabel, { color: colors.tabIconDefault }]}>
+                              Linked Client
+                            </Text>
+                            <Text style={[styles.linkedCustomerName, { color: colors.text }]} numberOfLines={1}>
+                              {stop.selectedCustomer.name}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleUnlinkCustomer(stop.id)}
+                            style={styles.unlinkBtn}
+                          >
+                            <Text style={[styles.unlinkBtnText, { color: colors.danger }]}>
+                              Unlink
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => handleOpenCustomerModal(stop.id)}
+                          style={styles.linkCustomerBtn}
+                        >
+                          <SymbolView
+                            name={{ ios: 'link.badge.plus', android: 'link', web: 'link' }}
+                            tintColor={colors.tint}
+                            size={14}
+                          />
+                          <Text style={[styles.linkCustomerBtnText, { color: colors.tint }]}>
+                            Link Customer Account
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+                ))}
+              </View>
+            )}
+          </GlassView>
+        </ScrollView>
 
-      {/* Sticky Bottom Actions Bar */}
-      <View
-        className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-800/95 border-t border-slate-200 dark:border-slate-800 px-6 py-4 flex-row justify-between items-center backdrop-blur-md"
-        style={{ paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
-      >
-        <View>
-          <Text className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">
-            Planned Route
-          </Text>
-          <Text className="text-xl font-bold text-slate-800 dark:text-slate-50">
-            {stops.length} Stops
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          className={`px-8 py-3.5 rounded-xl justify-center items-center active:scale-[0.98] ${
-            !selectedDriver || stops.length === 0 || saving
-              ? 'bg-slate-300 dark:bg-slate-700'
-              : 'bg-indigo-600 dark:bg-indigo-500 shadow-sm shadow-indigo-600/20'
-          }`}
-          onPress={handleSaveDelivery}
-          disabled={!selectedDriver || stops.length === 0 || saving}
+        {/* Sticky Bottom Actions Glass Bar */}
+        <GlassView
+          style={[styles.stickyFooter, { paddingBottom: Platform.OS === 'ios' ? insets.bottom + 8 : 16 }]}
+          borderRadius={0}
+          borderColor="transparent"
+          backgroundColor={colorScheme === 'dark' ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.92)'}
         >
-          {saving ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text className="text-white font-bold text-sm">Send to Driver</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <View style={styles.footerRow}>
+            <View>
+              <Text style={[styles.footerLabel, { color: colors.tabIconDefault }]}>
+                Planned Route
+              </Text>
+              <Text style={[styles.footerValue, { color: colors.text }]}>
+                {stops.length} Stops
+              </Text>
+            </View>
 
-      {/* ----------------- DRIVER SELECTOR MODAL ----------------- */}
-      <Modal visible={driverModalVisible} animationType="slide">
-        <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-          <View className="flex-row justify-between items-center px-5 py-4 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/50">
-            <Text className="text-lg font-bold text-slate-900 dark:text-slate-50">Select Active Driver</Text>
-            <TouchableOpacity onPress={() => { setDriverModalVisible(false); setDriverSearch(''); }} className="p-1">
-              <SymbolView
-                name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
-                tintColor="#94A3B8"
-                size={22}
-              />
+            <TouchableOpacity
+              style={[
+                styles.saveBtn,
+                (!selectedDriver || stops.length === 0 || saving)
+                  ? { backgroundColor: colorScheme === 'dark' ? '#334155' : '#CBD5E1' }
+                  : { backgroundColor: colors.tint }
+              ]}
+              onPress={handleSaveDelivery}
+              disabled={!selectedDriver || stops.length === 0 || saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveBtnText}>Send to Driver</Text>
+              )}
             </TouchableOpacity>
           </View>
+        </GlassView>
 
-          <View className="px-5 py-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/40">
-            <View className="flex-row items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2">
-              <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor="#94A3B8" size={16} />
-              <TextInput
-                className="flex-1 ml-2.5 text-slate-900 dark:text-slate-50 text-sm py-1.5"
-                placeholder="Search by name or phone..."
-                placeholderTextColor="#94A3B8"
-                value={driverSearch}
-                onChangeText={setDriverSearch}
-                autoCorrect={false}
-              />
-            </View>
-          </View>
-
-          <FlatList
-            className="flex-1"
-            data={activeDrivers}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <DriverListItem
-                item={item}
-                onPress={(d) => {
-                  setSelectedDriver(d);
-                  setDriverModalVisible(false);
-                  setDriverSearch('');
-                }}
-              />
-            )}
-            ListEmptyComponent={
-              <View className="py-20 items-center justify-center">
-                <Text className="text-slate-400 dark:text-slate-500 text-sm">No active drivers found.</Text>
+        {/* ----------------- DRIVER SELECTOR MODAL ----------------- */}
+        <Modal 
+          visible={driverModalVisible} 
+          animationType="slide"
+          onRequestClose={() => { setDriverModalVisible(false); setDriverSearch(''); }}
+        >
+          <ScreenBackground>
+            <SafeAreaView style={styles.modalSafeArea}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Select Active Driver</Text>
+                <TouchableOpacity onPress={() => { setDriverModalVisible(false); setDriverSearch(''); }} style={styles.modalCloseBtn}>
+                  <SymbolView
+                    name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
+                    tintColor={colors.tabIconDefault}
+                    size={22}
+                  />
+                </TouchableOpacity>
               </View>
-            }
-          />
-        </SafeAreaView>
-      </Modal>
 
-      {/* ----------------- CUSTOMER SELECTOR MODAL ----------------- */}
-      <Modal visible={customerModalVisible} animationType="slide">
-        <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-          <View className="flex-row justify-between items-center px-5 py-4 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/50">
-            <Text className="text-lg font-bold text-slate-900 dark:text-slate-50">Link Customer Account</Text>
-            <TouchableOpacity onPress={() => { setCustomerModalVisible(false); setCustomerSearch(''); setTargetStopId(null); }} className="p-1">
-              <SymbolView
-                name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
-                tintColor="#94A3B8"
-                size={22}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <View className="px-5 py-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/40">
-            <View className="flex-row items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2">
-              <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor="#94A3B8" size={16} />
-              <TextInput
-                className="flex-1 ml-2.5 text-slate-900 dark:text-slate-50 text-sm py-1.5"
-                placeholder="Search name or phone number..."
-                placeholderTextColor="#94A3B8"
-                value={customerSearch}
-                onChangeText={setCustomerSearch}
-                autoCorrect={false}
-              />
-            </View>
-          </View>
-
-          <FlatList
-            className="flex-1"
-            data={customers}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <CustomerListItem
-                item={item}
-                onPress={handleLinkCustomer}
-              />
-            )}
-            ListEmptyComponent={
-              <View className="py-20 items-center justify-center">
-                <Text className="text-slate-400 dark:text-slate-500 text-sm">No customers found.</Text>
+              <View style={styles.modalSearchBox}>
+                <View style={[styles.searchBarContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor={colors.tabIconDefault} size={16} />
+                  <TextInput
+                    style={[styles.modalSearchInput, { color: colors.text }]}
+                    placeholder="Search by name or phone..."
+                    placeholderTextColor={colors.tabIconDefault}
+                    value={driverSearch}
+                    onChangeText={setDriverSearch}
+                    autoCorrect={false}
+                  />
+                </View>
               </View>
-            }
-          />
-        </SafeAreaView>
-      </Modal>
 
-    </KeyboardAvoidingView>
+              <FlatList
+                style={styles.modalList}
+                data={activeDrivers}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedDriver(item);
+                      setDriverModalVisible(false);
+                      setDriverSearch('');
+                    }}
+                    style={[styles.modalListItem, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={styles.modalListLeft}>
+                      <Text style={[styles.modalItemName, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.modalItemPhone, { color: colors.tabIconDefault }]}>{item.phone}</Text>
+                    </View>
+                    <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor={colors.tabIconDefault} size={14} />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.modalEmpty}>
+                    <Text style={{ color: colors.tabIconDefault }}>No active drivers found.</Text>
+                  </View>
+                }
+              />
+            </SafeAreaView>
+          </ScreenBackground>
+        </Modal>
+
+        {/* ----------------- CUSTOMER SELECTOR MODAL ----------------- */}
+        <Modal 
+          visible={customerModalVisible} 
+          animationType="slide"
+          onRequestClose={() => { setCustomerModalVisible(false); setCustomerSearch(''); setTargetStopId(null); }}
+        >
+          <ScreenBackground>
+            <SafeAreaView style={styles.modalSafeArea}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Link Customer Account</Text>
+                <TouchableOpacity onPress={() => { setCustomerModalVisible(false); setCustomerSearch(''); setTargetStopId(null); }} style={styles.modalCloseBtn}>
+                  <SymbolView
+                    name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
+                    tintColor={colors.tabIconDefault}
+                    size={22}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalSearchBox}>
+                <View style={[styles.searchBarContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor={colors.tabIconDefault} size={16} />
+                  <TextInput
+                    style={[styles.modalSearchInput, { color: colors.text }]}
+                    placeholder="Search name or phone number..."
+                    placeholderTextColor={colors.tabIconDefault}
+                    value={customerSearch}
+                    onChangeText={setCustomerSearch}
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <FlatList
+                style={styles.modalList}
+                data={customers}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => handleLinkCustomer(item)}
+                    style={[styles.modalListItem, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={styles.modalListLeft}>
+                      <Text style={[styles.modalItemName, { color: colors.text }]}>{item.name}</Text>
+                      {item.phone && (
+                        <Text style={[styles.modalItemPhone, { color: colors.tabIconDefault }]}>{item.phone}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.modalItemBal, { color: colors.tabIconDefault }]}>
+                      Bal: {formatCurrency(item.balance)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.modalEmpty}>
+                    <Text style={{ color: colors.tabIconDefault }}>No customers found.</Text>
+                  </View>
+                }
+              />
+            </SafeAreaView>
+          </ScreenBackground>
+        </Modal>
+
+      </KeyboardAvoidingView>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 120, // clear sticky footer
+  },
+  card: {
+    padding: 20,
+    marginBottom: 16,
+  },
+  cardSub: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  textContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  driverName: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  driverPhone: {
+    fontSize: 12,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  changeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+  changeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chooseBtn: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  chooseBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  notesInput: {
+    minHeight: 60,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    textAlignVertical: 'top',
+  },
+  itemsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  itemsTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  addItemBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addItemBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  emptyStopsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    borderTopWidth: 1,
+    marginTop: 8,
+  },
+  emptyStopsText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  stopsListContainer: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+  },
+  stopBlock: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+  },
+  stopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  stopTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  deleteBtn: {
+    padding: 2,
+  },
+  stopInputGroup: {
+    marginBottom: 10,
+  },
+  stopInputLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  stopInput: {
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    fontSize: 12,
+  },
+  linkContainer: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    marginTop: 4,
+  },
+  linkHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  linkedTextContainer: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  linkedCustomerName: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  unlinkBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+  },
+  unlinkBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  linkCustomerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  linkCustomerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  stickyFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.15)',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  footerValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  saveBtn: {
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  modalSafeArea: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalCloseBtn: {
+    padding: 2,
+  },
+  modalSearchBox: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  modalSearchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    paddingVertical: 6,
+  },
+  modalList: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  modalListItem: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalListLeft: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  modalItemName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalItemPhone: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  modalItemBal: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  modalEmpty: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+});

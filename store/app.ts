@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import * as SecureStore from 'expo-secure-store';
 import { loadCredentials } from '../lib/api';
 
 export interface SyncConfig {
@@ -7,14 +8,17 @@ export interface SyncConfig {
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'not-configured';
+export type ThemeSetting = 'light' | 'dark' | 'system';
 
 interface AppState {
   syncConfig: SyncConfig | null;
   lastSyncTime: string;
   syncStatus: SyncStatus;
+  themeSetting: ThemeSetting;
   setSyncConfig: (config: SyncConfig | null) => void;
   setLastSyncTime: (time: string) => void;
   setSyncStatus: (status: SyncStatus) => void;
+  setThemeSetting: (theme: ThemeSetting) => Promise<void>;
   initStore: () => Promise<void>;
 }
 
@@ -22,6 +26,7 @@ export const useAppStore = create<AppState>((set) => ({
   syncConfig: null,
   lastSyncTime: '1970-01-01T00:00:00.000Z',
   syncStatus: 'not-configured',
+  themeSetting: 'system',
   
   setSyncConfig: (config) => set({ 
     syncConfig: config, 
@@ -29,6 +34,15 @@ export const useAppStore = create<AppState>((set) => ({
   }),
   setLastSyncTime: (time) => set({ lastSyncTime: time }),
   setSyncStatus: (status) => set({ syncStatus: status }),
+  
+  setThemeSetting: async (theme) => {
+    set({ themeSetting: theme });
+    try {
+      await SecureStore.setItemAsync('theme_setting', theme);
+    } catch (e) {
+      console.error('Failed to save theme setting to SecureStore:', e);
+    }
+  },
 
   initStore: async () => {
     try {
@@ -38,8 +52,13 @@ export const useAppStore = create<AppState>((set) => ({
       } else {
         set({ syncConfig: null, syncStatus: 'not-configured' });
       }
+      
+      const savedTheme = await SecureStore.getItemAsync('theme_setting');
+      if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+        set({ themeSetting: savedTheme as ThemeSetting });
+      }
     } catch (e) {
-      console.error('Failed to load store credentials:', e);
+      console.error('Failed to load store credentials or theme:', e);
       set({ syncConfig: null, syncStatus: 'not-configured' });
     }
   },

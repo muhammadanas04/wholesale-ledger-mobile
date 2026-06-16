@@ -7,11 +7,14 @@ import {
   RefreshControl,
   SafeAreaView,
   Pressable,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import Toast from 'react-native-toast-message';
 import { Q } from '@nozbe/watermelondb';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../db';
 import Customer from '../../db/models/Customer';
@@ -23,8 +26,11 @@ import { useQuery, useRelation } from '../../db/hooks';
 import { formatCurrency } from '../../lib/utils';
 import { runSync } from '../../lib/sync';
 import { useAppStore } from '../../store/app';
+import { useColorScheme } from '../../components/useColorScheme';
+import Colors from '../../constants/Colors';
+import { GlassView } from '../../components/GlassView';
+import { ScreenBackground } from '../../components/ScreenBackground';
 
-// Render individual activity row items resolving the customer reactively
 interface ActivityItem {
   id: string;
   type: 'sale' | 'payment';
@@ -38,22 +44,34 @@ interface ActivityItem {
 
 function ActivityRow({ item }: { item: ActivityItem }) {
   const customer = useRelation(item.record.customer);
-
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
   const isSale = item.type === 'sale';
 
   return (
     <Pressable
       onPress={() => router.push(`/customers/${item.customerId}`)}
-      className="flex-row justify-between items-center bg-white dark:bg-slate-800 px-5 py-4 border-b border-slate-100 dark:border-slate-800/40 active:bg-slate-50 dark:active:bg-slate-700/30"
+      style={({ pressed }) => [
+        styles.activityRow,
+        {
+          borderBottomColor: colors.border,
+          backgroundColor: pressed
+            ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)')
+            : 'transparent'
+        }
+      ]}
     >
-      <View className="flex-row items-center flex-1 pr-4">
+      <View style={styles.activityRowLeft}>
         {/* Type Icon */}
         <View
-          className={`h-10 w-10 rounded-full items-center justify-center mr-3.5 ${
-            isSale
-              ? 'bg-rose-50 dark:bg-rose-950/40'
-              : 'bg-emerald-50 dark:bg-emerald-950/40'
-          }`}
+          style={[
+            styles.activityIconContainer,
+            {
+              backgroundColor: isSale
+                ? (colorScheme === 'dark' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(254, 226, 226, 0.6)')
+                : (colorScheme === 'dark' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(209, 250, 229, 0.6)')
+            }
+          ]}
         >
           <SymbolView
             name={
@@ -61,22 +79,22 @@ function ActivityRow({ item }: { item: ActivityItem }) {
                 ? { ios: 'arrow.up.right.circle.fill', android: 'arrow_outward', web: 'arrow_outward' }
                 : { ios: 'arrow.down.left.circle.fill', android: 'arrow_downward', web: 'arrow_downward' }
             }
-            tintColor={isSale ? '#E11D48' : '#059669'}
-            size={20}
+            tintColor={isSale ? colors.danger : colors.success}
+            size={18}
           />
         </View>
 
         {/* Customer & Type details */}
-        <View className="flex-1">
-          <Text className="text-sm font-bold text-slate-900 dark:text-slate-50" numberOfLines={1}>
+        <View style={styles.activityDetails}>
+          <Text style={[styles.activityCustomerName, { color: colors.text }]} numberOfLines={1}>
             {customer ? customer.name : 'Loading customer...'}
           </Text>
-          <View className="flex-row items-center mt-0.5">
-            <Text className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 font-mono">
+          <View style={styles.activityMetaRow}>
+            <Text style={[styles.activityDate, { color: colors.tabIconDefault }]}>
               {item.date}
             </Text>
-            <View className="h-1 w-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-1.5" />
-            <Text className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[150px]" numberOfLines={1}>
+            <View style={[styles.dot, { backgroundColor: colors.border }]} />
+            <Text style={[styles.activityNotes, { color: colors.tabIconDefault }]} numberOfLines={1}>
               {item.notes || (isSale ? 'Sale Invoice' : 'Payment Recorded')}
             </Text>
           </View>
@@ -84,15 +102,16 @@ function ActivityRow({ item }: { item: ActivityItem }) {
       </View>
 
       {/* Amount and status details */}
-      <View className="items-end">
+      <View style={styles.activityRowRight}>
         <Text
-          className={`text-sm font-bold font-mono ${
-            isSale ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
-          }`}
+          style={[
+            styles.activityAmount,
+            { color: isSale ? colors.danger : colors.success }
+          ]}
         >
           {isSale ? '-' : '+'}{formatCurrency(item.amount)}
         </Text>
-        <Text className="text-[9px] text-slate-300 dark:text-slate-600 uppercase font-bold mt-0.5">
+        <Text style={[styles.activitySyncBadge, { color: colors.tabIconDefault }]}>
           {item.record.synced === 1 ? 'Synced' : 'Pending'}
         </Text>
       </View>
@@ -101,6 +120,10 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 }
 
 export default function DashboardScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+  
   const [refreshing, setRefreshing] = useState(false);
   const { syncStatus, lastSyncTime } = useAppStore();
 
@@ -203,29 +226,33 @@ export default function DashboardScreen() {
     switch (syncStatus) {
       case 'syncing':
         return {
-          bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
-          text: 'text-blue-600 dark:text-blue-400',
+          bg: colorScheme === 'dark' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(224, 242, 254, 0.6)',
+          border: colorScheme === 'dark' ? 'rgba(56, 189, 248, 0.3)' : 'rgba(186, 230, 253, 0.6)',
+          text: colors.accent,
           label: 'Syncing',
           icon: 'arrow.triangle.2.circlepath',
         };
       case 'error':
         return {
-          bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',
-          text: 'text-rose-600 dark:text-rose-400',
+          bg: colorScheme === 'dark' ? 'rgba(248, 113, 113, 0.15)' : 'rgba(254, 226, 226, 0.6)',
+          border: colorScheme === 'dark' ? 'rgba(248, 113, 113, 0.3)' : 'rgba(254, 205, 211, 0.6)',
+          text: colors.danger,
           label: 'Sync Error',
           icon: 'exclamationmark.triangle.fill',
         };
       case 'not-configured':
         return {
-          bg: 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800',
-          text: 'text-slate-400 dark:text-slate-500',
+          bg: colorScheme === 'dark' ? 'rgba(100, 116, 139, 0.15)' : 'rgba(241, 245, 249, 0.6)',
+          border: colorScheme === 'dark' ? 'rgba(100, 116, 139, 0.3)' : 'rgba(226, 232, 240, 0.6)',
+          text: colors.tabIconDefault,
           label: 'Unconfigured',
           icon: 'gearshape.fill',
         };
       default:
         return {
-          bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800',
-          text: 'text-emerald-600 dark:text-emerald-400',
+          bg: colorScheme === 'dark' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(209, 250, 229, 0.6)',
+          border: colorScheme === 'dark' ? 'rgba(52, 211, 153, 0.3)' : 'rgba(167, 243, 208, 0.6)',
+          text: colors.success,
           label: 'Synced',
           icon: 'checkmark.circle.fill',
         };
@@ -235,170 +262,398 @@ export default function DashboardScreen() {
   const syncBadge = getSyncBadge();
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <ScrollView
-        className="flex-1"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
-        }
-      >
-        {/* Welcome Header */}
-        <View className="px-5 pt-5 pb-4 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800/40 flex-row justify-between items-center">
-          <View>
-            <Text className="text-xl font-black text-slate-900 dark:text-slate-50">
-              Wholesale Ledger
-            </Text>
-            <Text className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">
-              Last sync: {formattedSyncTime}
-            </Text>
-          </View>
-
-          {/* Sync Status Badge */}
-          <View className={`flex-row items-center px-2.5 py-1.5 rounded-full border ${syncBadge.bg}`}>
-            <SymbolView
-              name={{ ios: syncBadge.icon as any, android: syncStatus === 'error' ? 'warning' : 'sync', web: 'sync' }}
-              tintColor={syncStatus === 'syncing' ? '#2563EB' : syncStatus === 'error' ? '#E11D48' : syncStatus === 'not-configured' ? '#94A3B8' : '#059669'}
-              size={12}
-            />
-            <Text className={`text-[10px] font-black uppercase ml-1.5 ${syncBadge.text}`}>
-              {syncBadge.label}
-            </Text>
-          </View>
-        </View>
-
-        {/* Metrics Grid */}
-        <View className="p-5">
-          <View className="flex-row mb-4">
-            {/* Outstanding Balance Receivables Card */}
-            <TouchableOpacity
-              onPress={() => router.push('/customers')}
-              className="flex-1 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm mr-2 active:scale-[0.98]"
-            >
-              <View className="flex-row justify-between items-center mb-2.5">
-                <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  Receivables
-                </Text>
-                <View className="h-6 w-6 rounded-full bg-rose-50 dark:bg-rose-950/40 items-center justify-center">
-                  <SymbolView
-                    name={{ ios: 'indianrupeesign.circle.fill', android: 'payments', web: 'payments' }}
-                    tintColor="#E11D48"
-                    size={14}
-                  />
-                </View>
-              </View>
-              <Text
-                className="text-lg font-mono font-black text-rose-600 dark:text-rose-400"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {formatCurrency(totalOutstandingBalance)}
+    <ScreenBackground>
+      {/* Set padding top for safe area in custom stack headers */}
+      <View style={styles.rootContainer}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+          }
+        >
+          {/* Welcome Header */}
+          <GlassView style={styles.welcomeCard} borderRadius={24}>
+            <View>
+              <Text style={[styles.welcomeTitle, { color: colors.text }]}>
+                Wholesale Ledger
               </Text>
-              <Text className="text-[9px] text-slate-400 dark:text-slate-500 mt-1">
-                Outstanding balance due
+              <Text style={[styles.welcomeSub, { color: colors.tabIconDefault }]}>
+                Last sync: {formattedSyncTime}
               </Text>
-            </TouchableOpacity>
-
-            {/* Active Drivers Card */}
-            <TouchableOpacity
-              onPress={() => router.push('/delivery/drivers')}
-              className="flex-1 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm ml-2 active:scale-[0.98]"
-            >
-              <View className="flex-row justify-between items-center mb-2.5">
-                <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  Drivers
-                </Text>
-                <View className="h-6 w-6 rounded-full bg-indigo-50 dark:bg-indigo-950/40 items-center justify-center">
-                  <SymbolView
-                    name={{ ios: 'person.2.fill', android: 'people', web: 'people' }}
-                    tintColor="#4F46E5"
-                    size={14}
-                  />
-                </View>
-              </View>
-              <Text className="text-xl font-black text-indigo-600 dark:text-indigo-400">
-                {activeDriversCount}
-              </Text>
-              <Text className="text-[9px] text-slate-400 dark:text-slate-500 mt-1">
-                Active drivers in system
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Delivery Summary Banner */}
-          <TouchableOpacity
-            onPress={() => router.push('/delivery')}
-            className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm flex-row justify-between items-center active:scale-[0.99]"
-          >
-            <View className="flex-row items-center flex-1 pr-4">
-              <View className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 items-center justify-center mr-3.5">
-                <SymbolView
-                  name={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
-                  tintColor="#4F46E5"
-                  size={20}
-                />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                  Delivery Progress
-                </Text>
-                <View className="flex-row items-center mt-0.5">
-                  <Text className="text-xs text-slate-400 dark:text-slate-500">
-                    {deliveriesProgress.pending} Pending
-                  </Text>
-                  <View className="h-1 w-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-1.5" />
-                  <Text className="text-xs text-slate-400 dark:text-slate-500">
-                    {deliveriesProgress.inProgress} In Progress
-                  </Text>
-                  <View className="h-1 w-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-1.5" />
-                  <Text className="text-xs text-slate-400 dark:text-slate-500">
-                    {deliveriesProgress.completed} Completed
-                  </Text>
-                </View>
-              </View>
             </View>
-            <SymbolView
-              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-              tintColor="#94A3B8"
-              size={18}
-            />
-          </TouchableOpacity>
-        </View>
 
-        {/* Recent Activity Header */}
-        <View className="px-5 pt-2 pb-1.5 flex-row justify-between items-end">
-          <View>
-            <Text className="text-base font-bold text-slate-800 dark:text-slate-100">
+            {/* Sync Status Badge */}
+            <View style={[styles.badgeContainer, { backgroundColor: syncBadge.bg, borderColor: syncBadge.border }]}>
+              <SymbolView
+                name={{ ios: syncBadge.icon as any, android: syncStatus === 'error' ? 'warning' : 'sync', web: 'sync' }}
+                tintColor={syncBadge.text}
+                size={12}
+              />
+              <Text style={[styles.badgeText, { color: syncBadge.text }]}>
+                {syncBadge.label}
+              </Text>
+            </View>
+          </GlassView>
+
+          {/* Metrics Grid */}
+          <View style={styles.metricsGrid}>
+            <View style={styles.metricsRow}>
+              {/* Receivables Card */}
+              <TouchableOpacity
+                onPress={() => router.push('/customers')}
+                style={styles.metricCardContainer}
+                activeOpacity={0.9}
+              >
+                <GlassView style={styles.metricCard} borderRadius={20}>
+                  <View style={styles.metricHeader}>
+                    <Text style={[styles.metricLabel, { color: colors.tabIconDefault }]}>
+                      Receivables
+                    </Text>
+                    <View style={[styles.metricIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(254, 226, 226, 0.6)' }]}>
+                      <SymbolView
+                        name={{ ios: 'indianrupeesign.circle.fill', android: 'payments', web: 'payments' }}
+                        tintColor={colors.danger}
+                        size={12}
+                      />
+                    </View>
+                  </View>
+                  <Text
+                    style={[styles.metricValueLarge, { color: colors.danger }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {formatCurrency(totalOutstandingBalance)}
+                  </Text>
+                  <Text style={[styles.metricSubtext, { color: colors.tabIconDefault }]}>
+                    Outstanding balance due
+                  </Text>
+                </GlassView>
+              </TouchableOpacity>
+
+              {/* Drivers Card */}
+              <TouchableOpacity
+                onPress={() => router.push('/delivery/drivers')}
+                style={styles.metricCardContainer}
+                activeOpacity={0.9}
+              >
+                <GlassView style={styles.metricCard} borderRadius={20}>
+                  <View style={styles.metricHeader}>
+                    <Text style={[styles.metricLabel, { color: colors.tabIconDefault }]}>
+                      Drivers
+                    </Text>
+                    <View style={[styles.metricIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(224, 242, 254, 0.6)' }]}>
+                      <SymbolView
+                        name={{ ios: 'person.2.fill', android: 'people', web: 'people' }}
+                        tintColor={colors.accent}
+                        size={12}
+                      />
+                    </View>
+                  </View>
+                  <Text style={[styles.metricValueText, { color: colors.accent }]}>
+                    {activeDriversCount}
+                  </Text>
+                  <Text style={[styles.metricSubtext, { color: colors.tabIconDefault }]}>
+                    Active drivers in system
+                  </Text>
+                </GlassView>
+              </TouchableOpacity>
+            </View>
+
+            {/* Delivery Progress Banner */}
+            <TouchableOpacity
+              onPress={() => router.push('/delivery')}
+              activeOpacity={0.9}
+            >
+              <GlassView style={styles.deliveryProgressBanner} borderRadius={20}>
+                <View style={styles.deliveryProgressLeft}>
+                  <View style={[styles.deliveryProgressIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(13, 148, 136, 0.15)' : 'rgba(204, 251, 241, 0.6)' }]}>
+                    <SymbolView
+                      name={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
+                      tintColor={colors.tint}
+                      size={18}
+                    />
+                  </View>
+                  <View style={styles.deliveryProgressTextCol}>
+                    <Text style={[styles.deliveryProgressTitle, { color: colors.text }]}>
+                      Delivery Progress
+                    </Text>
+                    <View style={styles.deliveryProgressMeta}>
+                      <Text style={[styles.deliveryProgressMetaText, { color: colors.tabIconDefault }]}>
+                        {deliveriesProgress.pending} Pending
+                      </Text>
+                      <View style={[styles.dot, { backgroundColor: colors.border }]} />
+                      <Text style={[styles.deliveryProgressMetaText, { color: colors.tabIconDefault }]}>
+                        {deliveriesProgress.inProgress} Active
+                      </Text>
+                      <View style={[styles.dot, { backgroundColor: colors.border }]} />
+                      <Text style={[styles.deliveryProgressMetaText, { color: colors.tabIconDefault }]}>
+                        {deliveriesProgress.completed} Done
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <SymbolView
+                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                  tintColor={colors.tabIconDefault}
+                  size={16}
+                />
+              </GlassView>
+            </TouchableOpacity>
+          </View>
+
+          {/* Recent Activity Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Recent Activity
             </Text>
-            <Text className="text-xs text-slate-400 dark:text-slate-500">
+            <Text style={[styles.sectionSub, { color: colors.tabIconDefault }]}>
               Latest invoices and receipts
             </Text>
           </View>
-        </View>
 
-        {/* Activity List Container */}
-        <View className="bg-white dark:bg-slate-800 border-t border-b border-slate-100 dark:border-slate-800/40 mt-3 mb-10 shadow-sm">
-          {recentActivities.length === 0 ? (
-            <View className="py-12 items-center justify-center px-6">
-              <SymbolView
-                name={{ ios: 'doc.plaintext.fill', android: 'receipt_long', web: 'receipt_long' }}
-                tintColor="#CBD5E1"
-                size={40}
-              />
-              <Text className="text-slate-500 dark:text-slate-400 font-semibold text-sm mt-3 text-center">
-                No recent activity.
-              </Text>
-              <Text className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 text-center max-w-[240px]">
-                Create new sales or record payments to see them listed here.
-              </Text>
-            </View>
-          ) : (
-            recentActivities.map((activity) => (
-              <ActivityRow key={`${activity.type}-${activity.id}`} item={activity} />
-            ))
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Activity List Container */}
+          <GlassView style={styles.activityCard} borderRadius={24}>
+            {recentActivities.length === 0 ? (
+              <View style={styles.emptyActivity}>
+                <SymbolView
+                  name={{ ios: 'doc.plaintext.fill', android: 'receipt_long', web: 'receipt_long' }}
+                  tintColor={colors.tabIconDefault}
+                  size={36}
+                />
+                <Text style={[styles.emptyActivityTitle, { color: colors.text }]}>
+                  No recent activity.
+                </Text>
+                <Text style={[styles.emptyActivitySub, { color: colors.tabIconDefault }]}>
+                  Create new sales or record payments to see them listed here.
+                </Text>
+              </View>
+            ) : (
+              recentActivities.map((activity) => (
+                <ActivityRow key={`${activity.type}-${activity.id}`} item={activity} />
+              ))
+            )}
+          </GlassView>
+        </ScrollView>
+      </View>
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 110, // clear floating dock
+  },
+  welcomeCard: {
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  welcomeTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  welcomeSub: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginTop: 3,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginLeft: 6,
+  },
+  metricsGrid: {
+    marginBottom: 20,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  metricCardContainer: {
+    flex: 1,
+  },
+  metricCard: {
+    padding: 16,
+    height: 114,
+    justifyContent: 'space-between',
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  metricIconBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricValueLarge: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  metricValueText: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  metricSubtext: {
+    fontSize: 8,
+    fontWeight: '600',
+  },
+  deliveryProgressBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+  },
+  deliveryProgressLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  deliveryProgressIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  deliveryProgressTextCol: {
+    flex: 1,
+  },
+  deliveryProgressTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  deliveryProgressMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  deliveryProgressMetaText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  sectionHeader: {
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  sectionSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  activityCard: {
+    paddingVertical: 6,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  activityRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 10,
+  },
+  activityIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityDetails: {
+    flex: 1,
+  },
+  activityCustomerName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  activityMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  activityDate: {
+    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    marginHorizontal: 6,
+  },
+  activityNotes: {
+    fontSize: 9,
+    flex: 1,
+  },
+  activityRowRight: {
+    alignItems: 'flex-end',
+  },
+  activityAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+  },
+  activitySyncBadge: {
+    fontSize: 8,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  emptyActivity: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyActivityTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  emptyActivitySub: {
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+});
