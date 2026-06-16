@@ -11,8 +11,8 @@ export function ScreenBackground({ children }: ScreenBackgroundProps) {
   const colorScheme = useColorScheme();
 
   const colors = colorScheme === 'dark'
-    ? ['#000000', '#020203', '#050507'] as const
-    : ['#F8FAFC', '#F1F5F9', '#E0F2FE'] as const;
+    ? ['#121212', '#151515'] as const
+    : ['#EAEAE6', '#E5E5DF'] as const;
 
   return (
     <View style={styles.container}>

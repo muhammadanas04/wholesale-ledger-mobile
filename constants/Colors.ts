@@ -3,13 +3,13 @@ const tintColorDark = '#2DD4BF';  // Teal 400
 
 export default {
   light: {
-    text: '#0F172A', // Slate 900
-    background: '#F1F5F9', // Slate 100
-    surface: '#FFFFFF',
+    text: '#111115', // Deep charcoal black
+    background: '#EAEAE6', // Warm premium off-white/beige grey
+    surface: '#FFFFFF', // Solid pure white
     surfaceSolid: '#FFFFFF',
-    border: '#E2E8F0', // Solid Slate 200 border
+    border: '#D2D2CC', // Subtle warm grey border
     tint: tintColorLight,
-    tabIconDefault: '#94A3B8', // Slate 400
+    tabIconDefault: '#8E8E93',
     tabIconSelected: tintColorLight,
     accent: '#0284C7', // Sky 600
     success: '#10B981', // Emerald 500
@@ -17,13 +17,13 @@ export default {
     warning: '#F59E0B', // Amber 500
   },
   dark: {
-    text: '#F8FAFC', // Slate 50
-    background: '#000000', // Pitch Black canvas
-    surface: '#0A0A0C', // Charcoal-Black card background
-    surfaceSolid: '#0A0A0C',
-    border: '#1D1D21', // Dark solid border
+    text: '#F2F2F7', // Creamy off-white text
+    background: '#121212', // Solid dark neutral gray
+    surface: '#1C1C1E', // iOS-style dark card surface
+    surfaceSolid: '#1C1C1E',
+    border: '#2C2C2E', // Subtle dark gray border
     tint: tintColorDark,
-    tabIconDefault: '#52525B', // Zinc 500
+    tabIconDefault: '#8E8E93',
     tabIconSelected: tintColorDark,
     accent: '#38BDF8', // Sky 400
     success: '#34D399', // Emerald 400

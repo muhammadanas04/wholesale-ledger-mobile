@@ -9,6 +9,7 @@ import {
   TextInput,
   Pressable,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -43,44 +44,13 @@ interface UnifiedTransaction {
   record: Sale | Payment;
 }
 
-// Subcomponent to load and display sale items weight and rate reactively
-function SaleMetaDetails({ sale }: { sale: Sale }) {
-  const items = useQuery(useMemo(() => sale.items, [sale]));
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme];
-
-  const details = useMemo(() => {
-    if (items.length === 0) return null;
-    const totalWeight = items.reduce((sum, item) => sum + (item.weight || 0), 0);
-    
-    if (items.length === 1) {
-      const item = items[0];
-      return {
-        text: `${totalWeight} kg @ ${formatCurrency(item.unitPrice)}/kg`,
-        single: true,
-      };
-    }
-    
-    return {
-      text: `${totalWeight} kg (${items.length} items)`,
-      single: false,
-    };
-  }, [items]);
-
-  if (!details) return null;
-
-  return (
-    <Text style={[styles.metaText, { color: colors.tabIconDefault }]}>
-      {details.text}
-    </Text>
-  );
-}
-
 function LedgerRow({ item }: { item: UnifiedTransaction }) {
   const customer = useRelation(item.record.customer);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
   const isSale = item.type === 'sale';
+
+  const finalValue = item.amount - item.discount;
 
   return (
     <Pressable
@@ -88,75 +58,42 @@ function LedgerRow({ item }: { item: UnifiedTransaction }) {
       style={({ pressed }) => [
         styles.row,
         {
+          borderBottomColor: colors.border,
           backgroundColor: pressed 
             ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)')
-            : colors.surface,
-          borderColor: colors.border,
+            : 'transparent',
         }
       ]}
     >
-      <View style={styles.rowLeft}>
-        <View
-          style={[
-            styles.typeIconContainer,
-            {
-              backgroundColor: isSale 
-                ? (colorScheme === 'dark' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(254, 226, 226, 0.6)')
-                : (colorScheme === 'dark' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(209, 250, 229, 0.6)')
-            }
-          ]}
-        >
-          <SymbolView
-            name={
-              isSale
-                ? { ios: 'arrow.up.right.circle.fill', android: 'arrow_outward', web: 'arrow_outward' }
-                : { ios: 'arrow.down.left.circle.fill', android: 'arrow_downward', web: 'arrow_downward' }
-            }
-            tintColor={isSale ? colors.danger : colors.success}
-            size={20}
-          />
-        </View>
+      {/* Date Cell */}
+      <Text style={[styles.cell, styles.dateCell, { color: colors.tabIconDefault, width: 90 }]}>
+        {item.date}
+      </Text>
 
-        <View style={styles.rowDetails}>
-          <Text style={[styles.customerName, { color: colors.text }]} numberOfLines={1}>
-            {customer ? customer.name : (customer === null ? 'Unknown' : 'Loading customer...')}
-          </Text>
-          <View style={styles.rowMeta}>
-            <Text style={[styles.dateText, { color: colors.tabIconDefault }]}>
-              {item.date}
-            </Text>
-            {isSale ? (
-              <>
-                <View style={[styles.dot, { backgroundColor: colors.border }]} />
-                <SaleMetaDetails sale={item.record as Sale} />
-              </>
-            ) : (
-              item.discount > 0 && (
-                <>
-                  <View style={[styles.dot, { backgroundColor: colors.border }]} />
-                  <Text style={[styles.discountText, { color: colors.accent }]}>
-                    Discount: {formatCurrency(item.discount)}
-                  </Text>
-                </>
-              )
-            )}
-          </View>
-        </View>
-      </View>
+      {/* Customer Cell */}
+      <Text style={[styles.cell, styles.customerCell, { color: colors.text, width: 115 }]} numberOfLines={1}>
+        {customer ? customer.name : (customer === null ? 'Unknown' : 'Loading...')}
+      </Text>
 
-      <View style={styles.rowRight}>
-        <Text
-          style={[
-            styles.amountText,
-            { color: isSale ? colors.danger : colors.success }
-          ]}
-        >
-          {isSale ? '-' : '+'}{formatCurrency(item.amount)}
-        </Text>
-        <Text style={[styles.syncBadge, { color: colors.tabIconDefault }]}>
-          {item.synced === 1 ? 'Synced' : 'Pending'}
-        </Text>
-      </View>
+      {/* Sale (Debit) Cell */}
+      <Text style={[styles.cell, styles.amountCell, { color: isSale ? colors.danger : colors.tabIconDefault, width: 85 }]}>
+        {isSale ? formatCurrency(item.amount) : '-'}
+      </Text>
+
+      {/* Paid (Credit) Cell */}
+      <Text style={[styles.cell, styles.amountCell, { color: !isSale ? colors.success : colors.tabIconDefault, width: 85 }]}>
+        {!isSale ? formatCurrency(item.amount) : '-'}
+      </Text>
+
+      {/* Discount Cell */}
+      <Text style={[styles.cell, styles.amountCell, { color: colors.danger, width: 80 }]}>
+        {item.discount > 0 ? `-${formatCurrency(item.discount)}` : '-'}
+      </Text>
+
+      {/* Final Value Cell */}
+      <Text style={[styles.cell, styles.amountCell, styles.finalValueCell, { color: colors.text, width: 100 }]}>
+        {formatCurrency(finalValue)}
+      </Text>
     </Pressable>
   );
 }
@@ -456,28 +393,42 @@ export default function LedgerScreen() {
         </GlassView>
       </View>
 
-      <FlashList
-        data={combinedTransactions}
-        renderItem={({ item }) => <LedgerRow item={item} />}
-        keyExtractor={item => item.id}
-        estimatedItemSize={76}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <SymbolView
-              name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
-              tintColor={colors.tabIconDefault}
-              size={44}
-            />
-            <Text style={[styles.emptyText, { color: colors.tabIconDefault }]}>
-              No matching ledger entries found.
-            </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.horizontalScroll}>
+        <View style={styles.tableContainer}>
+          {/* Table Header Row */}
+          <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.headerCell, { color: colors.tabIconDefault, width: 90 }]}>DATE</Text>
+            <Text style={[styles.headerCell, { color: colors.tabIconDefault, width: 115 }]}>CUSTOMER</Text>
+            <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 85 }]}>SALE</Text>
+            <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 85 }]}>PAID</Text>
+            <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 80 }]}>DISCOUNT</Text>
+            <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 100 }]}>FINAL VALUE</Text>
           </View>
-        }
-      />
+
+          <FlashList
+            data={combinedTransactions}
+            renderItem={({ item }) => <LedgerRow item={item} />}
+            keyExtractor={item => item.id}
+            estimatedItemSize={50}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <SymbolView
+                  name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
+                  tintColor={colors.tabIconDefault}
+                  size={44}
+                />
+                <Text style={[styles.emptyText, { color: colors.tabIconDefault }]}>
+                  No matching ledger entries found.
+                </Text>
+              </View>
+            }
+          />
+        </View>
+      </ScrollView>
 
       {/* Customer Selector Modal */}
       <Modal
@@ -653,76 +604,52 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   listContent: {
-    paddingHorizontal: 20,
     paddingBottom: 110, // clear floating dock
+  },
+  horizontalScroll: {
+    flex: 1,
+  },
+  tableContainer: {
+    width: 590,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1.5,
+  },
+  headerCell: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  headerCellRight: {
+    textAlign: 'right',
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 15,
-    marginBottom: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
   },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingRight: 12,
+  cell: {
+    fontSize: 13,
+    fontWeight: '500',
   },
-  typeIconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  rowDetails: {
-    flex: 1,
-  },
-  customerName: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  rowMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  dateText: {
-    fontSize: 11,
+  dateCell: {
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
-  metaText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  discountText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    marginHorizontal: 6,
-  },
-  rowRight: {
-    alignItems: 'flex-end',
-  },
-  amountText: {
-    fontSize: 15,
+  customerCell: {
     fontWeight: '700',
+  },
+  amountCell: {
+    textAlign: 'right',
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
-  syncBadge: {
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginTop: 2,
+  finalValueCell: {
+    fontWeight: '800',
   },
   emptyContainer: {
     alignItems: 'center',
