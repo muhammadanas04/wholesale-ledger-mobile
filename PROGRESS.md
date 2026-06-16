@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: SESSIONS 15-16 COMPLETE (Milestones 9 & 10 Implemented, All Issues Resolved)
+## Status: SESSIONS 18-19 COMPLETE (Recent Activity Paddings Fixed, Dark Theme Upgraded, Customer Loading Reactivity Resolved)
 
 ---
 
@@ -278,7 +278,35 @@ After every AI coding session, paste a summary of what was built, what changed, 
 | 25 | **Reactivity Bug in Detail Views due to Reference Equality**: In both `app/(tabs)/customers/[id].tsx` (line 78-95) and `app/(tabs)/delivery/[id].tsx` (line 96-113), the details record is observed using `findAndObserve(id)` and saved directly in local state (`setCustomer(record)` / `setDelivery(record)`). Because WatermelonDB updates records in-place, the emitted record has the same JavaScript object reference. As a result, React's state setter considers the state unchanged (`Object.is` returns true) and fails to trigger a re-render. Consequently, any changes to the customer (like updated outstanding balance) or delivery status will not be reflected on these screens in real-time unless the user exits and re-enters the page. The same issue affects `useRecord` and `useRelation` in `db/hooks.ts`. | Closed |
 | 26 | **Customer Selector Modal Memory and Performance Bottleneck in Sales & Payments Creation**: In both `app/(tabs)/sales/new.tsx` (line 550-578) and `app/(tabs)/payments/new.tsx` (line 379-407), the customer selector modal loads the entire customer list inside a non-virtualized `<ScrollView>` using `.map()`. Similar to Issue 22, this risks UI freezing and high memory usage when the customer dataset grows large. | Closed |
 | 27 | **Ledger Bill Mathematical Inconsistency with Incomplete Transaction History**: In `app/(tabs)/customers/[id].tsx` (line 144-157), the ledger text preview generates totals based only on the transaction records currently stored in the local SQLite database. If a customer has a non-zero starting balance or if historical transaction logs are purged/not pulled, the sum of `Total Sales - Total Paid - Total Discount` will not equal the actual outstanding `Balance Due`. This causes the generated invoice statement to look mathematically incorrect to the client. An "Opening Balance" or "Previous Balance" line item should be calculated and included: `Previous Balance = Balance Due - (Total Sales - Total Paid - Total Discount)`. | Closed |
+| 28 | **Reactivity Infinite Loop in `useRelation` Hook**: Accessing lazily decorated relation properties on WatermelonDB models (like `sale.customer`) returns a new Relation helper object reference on every access. Having `relation` in the dependency array of `useRelation`'s `useEffect` causes infinite subscription/teardown loops and displays `'Loading customer...'` permanently. | Closed |
+| 29 | **Double Layout Padding with Native Headers**: Placing `paddingTop: insets.top` inside screen containers while native stack or tab navigation headers are shown results in duplicate safe area top spacing, creating large empty layout gaps. | Closed |
+| 30 | **Stacked Navigation Headers in Ledger Index**: The nested Stack header and custom inline header in `ledger/index.tsx` stacked on top of each other, displaying double titles. | Closed |
 ---
+
+### Session 18 — June 16, 2026
+**What we built / fixed:**
+- **Navigation Dock & Restructuring**: Overhauled the app navigation layout to implement a custom, absolutely positioned bottom pill dock (`FloatingDock.tsx`) for navigation, restructuring the tabs config under `app/(tabs)/_layout.tsx` to map to Dashboard, Ledger stack, Customers stack, and Delivery stack.
+- **Glassmorphism Removal (Solid Card Style)**: Replaced translucent glass-like surface and border styles in `Colors.ts` with modern solid color tokens (`#FFFFFF` in light mode, `#1E293B` in dark mode) and opaque slate borders (`#E2E8F0` / `#334155`). Overhauled `GlassView.tsx` to render standard solid container cards with clean shadow elevations, removing `BlurView` on iOS/macOS and `backdropFilter` on web.
+- **Dark Mode Appearance Upgrade**: Updated the dark mode linear gradient in `ScreenBackground.tsx` from a colorful Teal/Sky Blue gradient to a sleek, dark neutral slate-navy color gradient (`['#0B0F19', '#0F172A', '#182235']`), creating a premium and professional dark theme canvas.
+- **Resolved Spacing & Redundant Padding (Issue 29)**: Removed duplicate `paddingTop: insets.top` styling from all screen containers inside Stacks showing native headers, resolving layout push-downs and alignment discrepancies.
+- **Resolved Ledger Header Stacking (Issue 30)**: Set `headerShown: false` for the index screen in `ledger/_layout.tsx` so only the custom Ledger header is displayed.
+- **Fixed useRelation Reactivity Loop (Issue 28)**: Updated the dependency array of the custom `useRelation` hook inside `db/hooks.ts` to watch `relation?.id` (stable string target ID) instead of the wrapper relation object reference, resolving the `'Loading customer...'` list rendering bug globally.
+- **Verified Type Safety & Bundling**: Checked and verified zero compiler errors (`npx tsc --noEmit` succeeds) and compiled native Hermes bundles successfully (`npx expo export` succeeds).
+
+**Current working state:**
+- The project is fully completed, verified, and compiling cleanly. Both Android and iOS native Hermes bundles export successfully without errors.
+
+---
+
+### Session 19 — June 16, 2026
+**What we built / fixed:**
+- **Robust Relation Reactivity (useRelation Hook Overhaul)**: Overhauled the custom `useRelation` hook inside `db/hooks.ts` using subscription reference tracking (`useRef`) and stable primitive dependencies (`[relationId, modelId]`). Initialized states to `undefined` (loading) and registered an explicit `error` handler in the subscription to catch and handle database record lookup failures gracefully, fixing the `'Loading customer...'` UI lock issue globally.
+- **Dark Theme Palette Upgrade**: Modified dark colors in `constants/Colors.ts` to utilize a pitch-black canvas background (`#000000`), deep charcoal-black cards (`#0A0A0C`), and dark borders (`#1D1D21`). Aligned the dark background canvas gradient in `ScreenBackground.tsx` to pitch-black/slate (`['#000000', '#020203', '#050507']`), producing a high-contrast and professional black appearance.
+- **Recent Activity & Ledger Row Layout Spacing**: Revamped the `ActivityRow` and `LedgerRow` list rows across `app/(tabs)/index.tsx` and `app/(tabs)/ledger/index.tsx` by expanding item spacing (vertical padding to `15px`, horizontal padding to `18px`), increasing key typography sizes (customer name to `15px`, sub-metadata to `11px`, price amount to `15px`), enlarging the type icon containers to `38px`, and increasing symbol size to `20px` for a unified, modern, and aligned look.
+- **Verified Type Safety & Bundling**: Checked and verified zero compiler errors (`npx tsc --noEmit` succeeds) and successfully compiled native Hermes bundles.
+
+**Current working state:**
+- The project is fully completed, verified, and compiling cleanly. Both Android and iOS native Hermes bundles export successfully without errors.
 
 ---
 
@@ -289,5 +317,7 @@ After every AI coding session, paste a summary of what was built, what changed, 
 | Use `pnpm` | Specified by User for consistent package management. |
 | Add `nativewind-env.d.ts` | Necessary to resolve type configurations for `className` attributes on native React Native components and support CSS file side-effect imports in TypeScript. |
 | Use String IDs in models | WatermelonDB on native requires string IDs (which will map to UUIDs). SQLite dynamic typing allows these to be stored seamlessly in D1 and SQLite on the desktop alongside desktop autoincrement integer IDs. |
+| Augment `@shopify/flash-list` | Added typescript module augmentation for `estimatedItemSize` in `flash-list-augment.d.ts` to solve compiler check failures on version `2.0.2`. |
+| Relax `BottomTabBarProps` | Simplified custom interface properties in `FloatingDock.tsx` using `any` type parameters to eliminate strict type conflicts with react-navigation inside `app/(tabs)/_layout.tsx`. |
 
 ---

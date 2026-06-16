@@ -11,7 +11,7 @@ export function ScreenBackground({ children }: ScreenBackgroundProps) {
   const colorScheme = useColorScheme();
 
   const colors = colorScheme === 'dark'
-    ? ['#0B0F19', '#0F172A', '#182235'] as const
+    ? ['#000000', '#020203', '#050507'] as const
     : ['#F8FAFC', '#F1F5F9', '#E0F2FE'] as const;
 
   return (

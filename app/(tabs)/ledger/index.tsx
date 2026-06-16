@@ -89,8 +89,8 @@ function LedgerRow({ item }: { item: UnifiedTransaction }) {
         styles.row,
         {
           backgroundColor: pressed 
-            ? (colorScheme === 'dark' ? 'rgba(30, 41, 59, 0.4)' : 'rgba(255, 255, 255, 0.9)')
-            : (colorScheme === 'dark' ? 'rgba(30, 41, 59, 0.2)' : 'rgba(255, 255, 255, 0.6)'),
+            ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)')
+            : colors.surface,
           borderColor: colors.border,
         }
       ]}
@@ -113,13 +113,13 @@ function LedgerRow({ item }: { item: UnifiedTransaction }) {
                 : { ios: 'arrow.down.left.circle.fill', android: 'arrow_downward', web: 'arrow_downward' }
             }
             tintColor={isSale ? colors.danger : colors.success}
-            size={18}
+            size={20}
           />
         </View>
 
         <View style={styles.rowDetails}>
           <Text style={[styles.customerName, { color: colors.text }]} numberOfLines={1}>
-            {customer ? customer.name : 'Loading customer...'}
+            {customer ? customer.name : (customer === null ? 'Unknown' : 'Loading customer...')}
           </Text>
           <View style={styles.rowMeta}>
             <Text style={[styles.dateText, { color: colors.tabIconDefault }]}>
@@ -662,8 +662,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 15,
     marginBottom: 8,
   },
   rowLeft: {
@@ -673,9 +673,9 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   typeIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -684,24 +684,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
   },
   dateText: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   metaText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
   discountText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
   dot: {
@@ -714,12 +714,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   amountText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   syncBadge: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     marginTop: 2,

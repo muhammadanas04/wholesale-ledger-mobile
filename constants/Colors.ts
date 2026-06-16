@@ -18,12 +18,12 @@ export default {
   },
   dark: {
     text: '#F8FAFC', // Slate 50
-    background: '#0F172A', // Slate 900
-    surface: '#1E293B',
-    surfaceSolid: '#1E293B',
-    border: '#334155', // Solid Slate 700 border
+    background: '#000000', // Pitch Black canvas
+    surface: '#0A0A0C', // Charcoal-Black card background
+    surfaceSolid: '#0A0A0C',
+    border: '#1D1D21', // Dark solid border
     tint: tintColorDark,
-    tabIconDefault: '#64748B', // Slate 500
+    tabIconDefault: '#52525B', // Zinc 500
     tabIconSelected: tintColorDark,
     accent: '#38BDF8', // Sky 400
     success: '#34D399', // Emerald 400

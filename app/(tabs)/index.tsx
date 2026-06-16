@@ -42,7 +42,7 @@ interface ActivityItem {
   record: Sale | Payment;
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
+function ActivityRow({ item, isLast }: { item: ActivityItem; isLast: boolean }) {
   const customer = useRelation(item.record.customer);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
@@ -55,6 +55,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         styles.activityRow,
         {
           borderBottomColor: colors.border,
+          borderBottomWidth: isLast ? 0 : 1,
           backgroundColor: pressed
             ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)')
             : 'transparent'
@@ -80,14 +81,14 @@ function ActivityRow({ item }: { item: ActivityItem }) {
                 : { ios: 'arrow.down.left.circle.fill', android: 'arrow_downward', web: 'arrow_downward' }
             }
             tintColor={isSale ? colors.danger : colors.success}
-            size={18}
+            size={20}
           />
         </View>
 
         {/* Customer & Type details */}
         <View style={styles.activityDetails}>
           <Text style={[styles.activityCustomerName, { color: colors.text }]} numberOfLines={1}>
-            {customer ? customer.name : 'Loading customer...'}
+            {customer ? customer.name : (customer === null ? 'Unknown' : 'Loading customer...')}
           </Text>
           <View style={styles.activityMetaRow}>
             <Text style={[styles.activityDate, { color: colors.tabIconDefault }]}>
@@ -429,8 +430,12 @@ export default function DashboardScreen() {
                 </Text>
               </View>
             ) : (
-              recentActivities.map((activity) => (
-                <ActivityRow key={`${activity.type}-${activity.id}`} item={activity} />
+              recentActivities.map((activity, index) => (
+                <ActivityRow
+                  key={`${activity.type}-${activity.id}`}
+                  item={activity}
+                  isLast={index === recentActivities.length - 1}
+                />
               ))
             )}
           </GlassView>
@@ -576,14 +581,14 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   activityCard: {
-    paddingVertical: 6,
+    paddingVertical: 0,
   },
   activityRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
     borderBottomWidth: 1,
   },
   activityRowLeft: {
@@ -593,9 +598,9 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   activityIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -604,16 +609,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityCustomerName: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
   },
   activityMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 4,
   },
   activityDate: {
-    fontSize: 9,
+    fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   dot: {
@@ -623,19 +628,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   activityNotes: {
-    fontSize: 9,
+    fontSize: 11,
     flex: 1,
   },
   activityRowRight: {
     alignItems: 'flex-end',
   },
   activityAmount: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   activitySyncBadge: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     marginTop: 2,
