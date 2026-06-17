@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, router, Stack } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';
 import Toast from 'react-native-toast-message';
@@ -135,6 +135,22 @@ export default function CustomerListScreen() {
 
   return (
     <ScreenBackground>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/customers/new')}
+              style={{ marginRight: 15, padding: 8 }}
+            >
+              <SymbolView
+                name={{ ios: 'person.fill.badge.plus', android: 'person_add', web: 'person_add' }}
+                tintColor={colors.tint}
+                size={22}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       {/* Set padding top for safe area in custom stack headers */}
       <View style={styles.rootContainer}>
         {/* Search Header */}
@@ -202,7 +218,7 @@ export default function CustomerListScreen() {
               { 
                 backgroundColor: colors.tint, 
                 shadowColor: colors.tint,
-                bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80 
+                bottom: Platform.OS === 'ios' ? insets.bottom + 110 : 110 
               }
             ]}
             activeOpacity={0.8}

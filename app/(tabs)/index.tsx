@@ -1,35 +1,34 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  SafeAreaView,
-  Pressable,
-  StyleSheet,
-  Platform,
-} from 'react-native';
+import { Q } from '@nozbe/watermelondb';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import Toast from 'react-native-toast-message';
-import { Q } from '@nozbe/watermelondb';
+import { useMemo, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
-import { database } from '../../db';
-import Customer from '../../db/models/Customer';
-import Driver from '../../db/models/Driver';
-import Sale from '../../db/models/Sale';
-import Payment from '../../db/models/Payment';
-import Delivery from '../../db/models/Delivery';
-import { useQuery, useRelation } from '../../db/hooks';
-import { formatCurrency } from '../../lib/utils';
-import { runSync } from '../../lib/sync';
-import { useAppStore } from '../../store/app';
-import { useColorScheme } from '../../components/useColorScheme';
-import Colors from '../../constants/Colors';
 import { GlassView } from '../../components/GlassView';
 import { ScreenBackground } from '../../components/ScreenBackground';
+import { useColorScheme } from '../../components/useColorScheme';
+import Colors from '../../constants/Colors';
+import { database } from '../../db';
+import { useQuery, useRelation } from '../../db/hooks';
+import Customer from '../../db/models/Customer';
+import Delivery from '../../db/models/Delivery';
+import Driver from '../../db/models/Driver';
+import Payment from '../../db/models/Payment';
+import Sale from '../../db/models/Sale';
+import { runSync } from '../../lib/sync';
+import { formatCurrency } from '../../lib/utils';
+import { useAppStore } from '../../store/app';
 
 interface ActivityItem {
   id: string;
@@ -42,7 +41,7 @@ interface ActivityItem {
   record: Sale | Payment;
 }
 
-function ActivityRow({ item, isLast }: { item: ActivityItem; isLast: boolean }) {
+function ActivityRow({ item, isFirst, isLast }: { item: ActivityItem; isFirst: boolean; isLast: boolean }) {
   const customer = useRelation(item.record.customer);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
@@ -50,12 +49,14 @@ function ActivityRow({ item, isLast }: { item: ActivityItem; isLast: boolean }) 
 
   return (
     <Pressable
-      onPress={() => router.push(`/customers/${item.customerId}`)}
+      onPress={() => router.push(`/customers/${item.customerId}?referrer=dashboard`)}
       style={({ pressed }) => [
         styles.activityRow,
         {
           borderBottomColor: colors.border,
           borderBottomWidth: isLast ? 0 : 1,
+          paddingTop: isFirst ? 20 : 14,
+          paddingBottom: isLast ? 20 : 14,
           backgroundColor: pressed
             ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)')
             : 'transparent'
@@ -124,9 +125,9 @@ export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
-  
+
   const [refreshing, setRefreshing] = useState(false);
-  const { syncStatus, lastSyncTime } = useAppStore();
+  const { syncStatus, lastSyncTime, shopName } = useAppStore();
 
   // Queries
   const customers = useQuery(useMemo(() => database.collections.get<Customer>('customers').query(), []));
@@ -277,7 +278,7 @@ export default function DashboardScreen() {
           <GlassView style={styles.welcomeCard} borderRadius={24}>
             <View>
               <Text style={[styles.welcomeTitle, { color: colors.text }]}>
-                Wholesale Ledger
+                {shopName}
               </Text>
               <Text style={[styles.welcomeSub, { color: colors.tabIconDefault }]}>
                 Last sync: {formattedSyncTime}
@@ -299,7 +300,7 @@ export default function DashboardScreen() {
 
           {/* Metrics Grid */}
           <View style={styles.metricsGrid}>
-            <View style={styles.metricsRow}>
+            <View style={[styles.metricsRow, { marginRight: 5 }]}>
               {/* Receivables Card */}
               <TouchableOpacity
                 onPress={() => router.push('/customers')}
@@ -434,6 +435,7 @@ export default function DashboardScreen() {
                 <ActivityRow
                   key={`${activity.type}-${activity.id}`}
                   item={activity}
+                  isFirst={index === 0}
                   isLast={index === recentActivities.length - 1}
                 />
               ))
@@ -581,14 +583,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   activityCard: {
-    paddingVertical: 0,
+    paddingVertical: 8,
   },
   activityRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
   activityRowLeft: {

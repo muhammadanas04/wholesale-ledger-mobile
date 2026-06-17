@@ -12,8 +12,9 @@ import {
   Platform,
   FlatList,
   StyleSheet,
+  BackHandler,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import Toast from 'react-native-toast-message';
 import * as Crypto from 'expo-crypto';
@@ -30,9 +31,10 @@ import { useColorScheme } from '../../../components/useColorScheme';
 import Colors from '../../../constants/Colors';
 import { GlassView } from '../../../components/GlassView';
 import { ScreenBackground } from '../../../components/ScreenBackground';
+import { DatePickerModal } from '../../../components/DatePickerModal';
 
 export default function RecordPaymentScreen() {
-  const { customerId } = useLocalSearchParams<{ customerId?: string }>();
+  const { customerId, referrer } = useLocalSearchParams<{ customerId?: string; referrer?: string }>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
@@ -44,6 +46,7 @@ export default function RecordPaymentScreen() {
   const [discountStr, setDiscountStr] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Selector Modal Visibility
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
@@ -63,6 +66,28 @@ export default function RecordPaymentScreen() {
         });
     }
   }, [customerId]);
+
+  const handleNavigationBack = () => {
+    if (referrer === 'customer-details' && selectedCustomer) {
+      router.push(`/customers/${selectedCustomer.id}?referrer=ledger`);
+    } else {
+      router.back();
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const backAction = () => {
+        handleNavigationBack();
+        return true;
+      };
+      const backHandler = BackHandler.addEventListener(
+        'hardwareBackPress',
+        backAction
+      );
+      return () => backHandler.remove();
+    }
+  }, [referrer, selectedCustomer]);
 
   // 2. Query customers reactively for Customer Picker
   const customersQuery = useMemo(() => {
@@ -187,7 +212,7 @@ export default function RecordPaymentScreen() {
         console.error('Post-payment creation sync failed:', err);
       });
 
-      router.back();
+      handleNavigationBack();
     } catch (e: any) {
       console.error('Failed to save payment transaction:', e);
       Toast.show({
@@ -202,6 +227,19 @@ export default function RecordPaymentScreen() {
 
   return (
     <ScreenBackground>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleNavigationBack} style={{ marginLeft: 15, padding: 8 }}>
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                tintColor={colors.tint}
+                size={22}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -259,16 +297,23 @@ export default function RecordPaymentScreen() {
             <Text style={[styles.dateLabel, { color: colors.text }]}>
               Payment Date
             </Text>
-            <TextInput
-              style={[styles.dateInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.tabIconDefault}
-              value={paymentDate}
-              onChangeText={setPaymentDate}
-              autoCorrect={false}
-              maxLength={10}
-            />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setDatePickerOpen(true)}
+              style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}
+            >
+              <Text style={{ color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 13 }}>
+                {paymentDate}
+              </Text>
+            </TouchableOpacity>
           </GlassView>
+
+          <DatePickerModal
+            visible={datePickerOpen}
+            value={paymentDate}
+            onChange={setPaymentDate}
+            onClose={() => setDatePickerOpen(false)}
+          />
 
           {/* Amount & Discount Card */}
           <GlassView style={styles.card}>

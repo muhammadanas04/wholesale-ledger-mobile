@@ -30,6 +30,7 @@ import { useColorScheme } from '../../../components/useColorScheme';
 import Colors from '../../../constants/Colors';
 import { GlassView } from '../../../components/GlassView';
 import { ScreenBackground } from '../../../components/ScreenBackground';
+import { DatePickerModal } from '../../../components/DatePickerModal';
 
 interface UnifiedTransaction {
   id: string;
@@ -44,6 +45,22 @@ interface UnifiedTransaction {
   record: Sale | Payment;
 }
 
+function WeightCell({ sale }: { sale: Sale }) {
+  const items = useQuery(sale.items);
+  const totalWeight = useMemo(() => {
+    return items.reduce((sum, item) => sum + (item.weight || 0), 0);
+  }, [items]);
+
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme];
+
+  return (
+    <Text style={[styles.cell, styles.amountCell, { color: colors.tabIconDefault, width: 70 }]}>
+      {totalWeight > 0 ? `${totalWeight} kg` : '-'}
+    </Text>
+  );
+}
+
 function LedgerRow({ item }: { item: UnifiedTransaction }) {
   const customer = useRelation(item.record.customer);
   const colorScheme = useColorScheme();
@@ -54,46 +71,55 @@ function LedgerRow({ item }: { item: UnifiedTransaction }) {
 
   return (
     <Pressable
-      onPress={() => router.push(`/customers/${item.customerId}`)}
+      onPress={() => router.push(`/customers/${item.customerId}?referrer=ledger`)}
       style={({ pressed }) => [
-        styles.row,
         {
-          borderBottomColor: colors.border,
           backgroundColor: pressed 
             ? (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)')
             : 'transparent',
         }
       ]}
     >
-      {/* Date Cell */}
-      <Text style={[styles.cell, styles.dateCell, { color: colors.tabIconDefault, width: 90 }]}>
-        {item.date}
-      </Text>
+      <View style={[styles.row, { borderBottomColor: colors.border }]}>
+        {/* Date Cell */}
+        <Text style={[styles.cell, styles.dateCell, { color: colors.tabIconDefault, width: 90 }]}>
+          {item.date}
+        </Text>
 
-      {/* Customer Cell */}
-      <Text style={[styles.cell, styles.customerCell, { color: colors.text, width: 115 }]} numberOfLines={1}>
-        {customer ? customer.name : (customer === null ? 'Unknown' : 'Loading...')}
-      </Text>
+        {/* Customer Cell */}
+        <Text style={[styles.cell, styles.customerCell, { color: colors.text, width: 115 }]} numberOfLines={1}>
+          {customer ? customer.name : (customer === null ? 'Unknown' : 'Loading...')}
+        </Text>
 
-      {/* Sale (Debit) Cell */}
-      <Text style={[styles.cell, styles.amountCell, { color: isSale ? colors.danger : colors.tabIconDefault, width: 85 }]}>
-        {isSale ? formatCurrency(item.amount) : '-'}
-      </Text>
+        {/* Sale (Debit) Cell */}
+        <Text style={[styles.cell, styles.amountCell, { color: isSale ? colors.danger : colors.tabIconDefault, width: 85 }]}>
+          {isSale ? formatCurrency(item.amount) : '-'}
+        </Text>
 
-      {/* Paid (Credit) Cell */}
-      <Text style={[styles.cell, styles.amountCell, { color: !isSale ? colors.success : colors.tabIconDefault, width: 85 }]}>
-        {!isSale ? formatCurrency(item.amount) : '-'}
-      </Text>
+        {/* Paid (Credit) Cell */}
+        <Text style={[styles.cell, styles.amountCell, { color: !isSale ? colors.success : colors.tabIconDefault, width: 85 }]}>
+          {!isSale ? formatCurrency(item.amount) : '-'}
+        </Text>
 
-      {/* Discount Cell */}
-      <Text style={[styles.cell, styles.amountCell, { color: colors.danger, width: 80 }]}>
-        {item.discount > 0 ? `-${formatCurrency(item.discount)}` : '-'}
-      </Text>
+        {/* Weight Cell */}
+        {isSale ? (
+          <WeightCell sale={item.record as Sale} />
+        ) : (
+          <Text style={[styles.cell, styles.amountCell, { color: colors.tabIconDefault, width: 70 }]}>
+            -
+          </Text>
+        )}
 
-      {/* Final Value Cell */}
-      <Text style={[styles.cell, styles.amountCell, styles.finalValueCell, { color: colors.text, width: 100 }]}>
-        {formatCurrency(finalValue)}
-      </Text>
+        {/* Discount Cell */}
+        <Text style={[styles.cell, styles.amountCell, { color: colors.danger, width: 80 }]}>
+          {item.discount > 0 ? `-${formatCurrency(item.discount)}` : '-'}
+        </Text>
+
+        {/* Final Value Cell */}
+        <Text style={[styles.cell, styles.amountCell, styles.finalValueCell, { color: colors.text, width: 100 }]}>
+          {formatCurrency(finalValue)}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -105,12 +131,21 @@ export default function LedgerScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'sales' | 'payments'>('all');
-  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'month'>('all');
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    return firstDay.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
   
   // Customer Picker Modal
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [startPickerOpen, setStartPickerOpen] = useState(false);
+  const [endPickerOpen, setEndPickerOpen] = useState(false);
 
   // 1. Fetch Customers for filter dropdown
   const customersQuery = useMemo(() => {
@@ -127,17 +162,19 @@ export default function LedgerScreen() {
 
   // Helper date queries
   const getDateRangeClause = () => {
-    const today = new Date().toISOString().split('T')[0];
-    if (timeFilter === 'today') {
-      return [Q.where('date', today)];
+    const cleanStart = startDate.trim();
+    const cleanEnd = endDate.trim();
+    const isStartValid = /^\d{4}-\d{2}-\d{2}$/.test(cleanStart);
+    const isEndValid = /^\d{4}-\d{2}-\d{2}$/.test(cleanEnd);
+
+    const clauses = [];
+    if (isStartValid) {
+      clauses.push(Q.where('date', Q.gte(cleanStart)));
     }
-    if (timeFilter === 'month') {
-      const firstDay = new Date();
-      firstDay.setDate(1);
-      const firstDayStr = firstDay.toISOString().split('T')[0];
-      return [Q.where('date', Q.between(firstDayStr as any, today as any))];
+    if (isEndValid) {
+      clauses.push(Q.where('date', Q.lte(cleanEnd)));
     }
-    return [];
+    return clauses;
   };
 
   // 2. Fetch Sales reactively
@@ -148,7 +185,7 @@ export default function LedgerScreen() {
     }
     clauses.push(Q.sortBy('date', Q.desc));
     return database.collections.get<Sale>('sales').query(...clauses);
-  }, [selectedCustomer, timeFilter]);
+  }, [selectedCustomer, startDate, endDate]);
 
   const sales = useQuery(salesQuery);
 
@@ -160,7 +197,7 @@ export default function LedgerScreen() {
     }
     clauses.push(Q.sortBy('date', Q.desc));
     return database.collections.get<Payment>('payments').query(...clauses);
-  }, [selectedCustomer, timeFilter]);
+  }, [selectedCustomer, startDate, endDate]);
 
   const payments = useQuery(paymentsQuery);
 
@@ -211,21 +248,24 @@ export default function LedgerScreen() {
 
   // 5. Calculate summary metrics
   const summary = useMemo(() => {
-    let totalSales = 0;
-    let totalPaid = 0;
+    let salesTotal = 0;
+    let paymentsTotal = 0;
     let totalDiscount = 0;
 
-    sales.forEach(s => totalSales += (s.totalAmount || 0));
+    sales.forEach(s => {
+      salesTotal += ((s.totalAmount || 0) - (s.discount || 0));
+      totalDiscount += (s.discount || 0);
+    });
     payments.forEach(p => {
-      totalPaid += (p.amount || 0);
+      paymentsTotal += ((p.amount || 0) - (p.discount || 0));
       totalDiscount += (p.discount || 0);
     });
 
     return {
-      sales: totalSales,
-      paid: totalPaid,
+      sales: salesTotal,
+      paid: paymentsTotal,
       discount: totalDiscount,
-      balance: totalSales - totalPaid - totalDiscount,
+      balance: salesTotal - paymentsTotal,
     };
   }, [sales, payments]);
 
@@ -332,38 +372,44 @@ export default function LedgerScreen() {
             ))}
           </View>
 
-          {/* Time filters segment */}
-          <View style={[styles.segmentContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            {(['all', 'today', 'month'] as const).map(time => (
-              <TouchableOpacity
-                key={time}
-                onPress={() => setTimeFilter(time)}
-                style={[
-                  styles.segmentButton,
-                  timeFilter === time && {
-                    backgroundColor: colors.surfaceSolid,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 2,
-                    elevation: 1,
-                  }
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    { 
-                      color: timeFilter === time ? colors.tint : colors.tabIconDefault,
-                      fontWeight: timeFilter === time ? '700' : '500' 
-                    }
-                  ]}
-                >
-                  {time === 'all' ? 'All Time' : time === 'today' ? 'Today' : 'Month'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          {/* Date Range Fields */}
+          <View style={styles.dateRangeRow}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setStartPickerOpen(true)}
+              style={[styles.dateInputContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={[styles.dateInputLabel, { color: colors.tabIconDefault }]}>Start Date</Text>
+              <Text style={[styles.dateInputField, { color: colors.text }]}>
+                {startDate}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setEndPickerOpen(true)}
+              style={[styles.dateInputContainer, { backgroundColor: colors.surface, borderColor: colors.border, marginLeft: 12 }]}
+            >
+              <Text style={[styles.dateInputLabel, { color: colors.tabIconDefault }]}>End Date</Text>
+              <Text style={[styles.dateInputField, { color: colors.text }]}>
+                {endDate}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <DatePickerModal
+            visible={startPickerOpen}
+            value={startDate}
+            onChange={setStartDate}
+            onClose={() => setStartPickerOpen(false)}
+          />
+
+          <DatePickerModal
+            visible={endPickerOpen}
+            value={endDate}
+            onChange={setEndDate}
+            onClose={() => setEndPickerOpen(false)}
+          />
         </View>
 
         {/* Totals Summary Panel */}
@@ -401,6 +447,7 @@ export default function LedgerScreen() {
             <Text style={[styles.headerCell, { color: colors.tabIconDefault, width: 115 }]}>CUSTOMER</Text>
             <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 85 }]}>SALE</Text>
             <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 85 }]}>PAID</Text>
+            <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 70 }]}>WEIGHT</Text>
             <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 80 }]}>DISCOUNT</Text>
             <Text style={[styles.headerCell, styles.headerCellRight, { color: colors.tabIconDefault, width: 100 }]}>FINAL VALUE</Text>
           </View>
@@ -610,7 +657,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tableContainer: {
-    width: 590,
+    width: 660,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -706,5 +753,34 @@ const styles = StyleSheet.create({
   modalItemPhone: {
     fontSize: 12,
     marginTop: 2,
+  },
+  dateRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  dateInputContainer: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    height: 48,
+    justifyContent: 'center',
+  },
+  dateInputLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  dateInputField: {
+    fontSize: 13,
+    fontWeight: '600',
+    padding: 0,
+    height: 18,
   },
 });

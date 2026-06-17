@@ -47,7 +47,11 @@ async function prepareUpsertForTable(
             const columns = Object.keys(remote).filter((k) => k !== 'id');
             columns.forEach((col) => {
               const propName = toCamelCase(col);
-              (record as any)[propName] = remote[col];
+              let val = remote[col];
+              if (col.endsWith('_id') && val !== null && val !== undefined) {
+                val = String(val);
+              }
+              (record as any)[propName] = val;
             });
             (record as any).synced = 1; // Mark synced locally
           })
@@ -61,7 +65,11 @@ async function prepareUpsertForTable(
           const columns = Object.keys(remote).filter((k) => k !== 'id');
           columns.forEach((col) => {
             const propName = toCamelCase(col);
-            (record as any)[propName] = remote[col];
+            let val = remote[col];
+            if (col.endsWith('_id') && val !== null && val !== undefined) {
+              val = String(val);
+            }
+            (record as any)[propName] = val;
           });
           (record as any).synced = 1; // Mark synced locally
         })

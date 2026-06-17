@@ -15,6 +15,27 @@ export function FloatingDock({ state, descriptors, navigation }: BottomTabBarPro
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
 
+  // Hide tab bar when nested stack screens are active (e.g. details/new screens)
+  const activeRoute = state.routes[state.index];
+  let shouldHideTabBar = false;
+  if (activeRoute.state) {
+    const getActiveRouteName = (stateObj: any): string => {
+      const route = stateObj.routes[stateObj.index];
+      if (route.state) {
+        return getActiveRouteName(route.state);
+      }
+      return route.name;
+    };
+    const activeNestedRouteName = getActiveRouteName(activeRoute.state);
+    if (activeNestedRouteName !== 'index') {
+      shouldHideTabBar = true;
+    }
+  }
+
+  if (shouldHideTabBar) {
+    return null;
+  }
+
   // We only render the tabs we expect in our navigation restructure
   // Route names: "index", "ledger", "customers", "delivery"
   const visibleRoutes = state.routes.filter((route: any) => 

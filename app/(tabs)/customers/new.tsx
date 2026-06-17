@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Text,
   View,
@@ -10,7 +10,7 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams, Stack } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import * as Crypto from 'expo-crypto';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,10 +29,33 @@ export default function NewCustomerScreen() {
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
 
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editId) {
+      database.collections
+        .get<Customer>('customers')
+        .find(editId)
+        .then((record) => {
+          setName(record.name);
+          setPhone(record.phone || '');
+          setAddress(record.address || '');
+        })
+        .catch((err) => {
+          console.error('Failed to load customer for editing:', err);
+          Toast.show({
+            type: 'error',
+            text1: 'Load Error',
+            text2: 'Could not load customer details.',
+          });
+        });
+    }
+  }, [editId]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -65,35 +88,46 @@ export default function NewCustomerScreen() {
 
     setSaving(true);
     try {
-      const customerId = Crypto.randomUUID();
       const timestamp = new Date().toISOString();
 
       await database.write(async () => {
-        await database.collections.get<Customer>('customers').create((customer) => {
-          customer._raw.id = customerId;
-          customer.name = name.trim();
-          customer.phone = sanitizedPhone;
-          customer.address = address.trim() || undefined;
-          customer.balance = 0;
-          customer.createdAt = timestamp;
-          customer.updatedAt = timestamp;
-          customer.synced = 0;
-        });
+        if (editId) {
+          const customerRecord = await database.collections.get<Customer>('customers').find(editId);
+          await customerRecord.update((customer) => {
+            customer.name = name.trim();
+            customer.phone = sanitizedPhone;
+            customer.address = address.trim() || undefined;
+            customer.updatedAt = timestamp;
+            customer.synced = 0;
+          });
+        } else {
+          const customerId = Crypto.randomUUID();
+          await database.collections.get<Customer>('customers').create((customer) => {
+            customer._raw.id = customerId;
+            customer.name = name.trim();
+            customer.phone = sanitizedPhone;
+            customer.address = address.trim() || undefined;
+            customer.balance = 0;
+            customer.createdAt = timestamp;
+            customer.updatedAt = timestamp;
+            customer.synced = 0;
+          });
+        }
       });
 
       Toast.show({
         type: 'success',
-        text1: 'Customer Created',
-        text2: `${name.trim()} added successfully!`,
+        text1: editId ? 'Customer Updated' : 'Customer Created',
+        text2: `${name.trim()} saved successfully!`,
       });
 
       runSync(database).catch((err) => {
-        console.error('Post-creation sync run failed:', err);
+        console.error('Post-save sync run failed:', err);
       });
 
       router.back();
     } catch (e: any) {
-      console.error('Failed to create customer:', e);
+      console.error('Failed to save customer:', e);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -106,6 +140,7 @@ export default function NewCustomerScreen() {
 
   return (
     <ScreenBackground>
+      <Stack.Screen options={{ title: editId ? 'Edit Customer' : 'New Customer' }} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}

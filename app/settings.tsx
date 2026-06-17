@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -53,11 +54,16 @@ export default function SettingsScreen() {
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
 
-  const { syncConfig, syncStatus, setSyncConfig, themeSetting, setThemeSetting } = useAppStore();
+  const { syncConfig, syncStatus, setSyncConfig, themeSetting, setThemeSetting, setLastSyncTime, shopName, setShopName } = useAppStore();
   const [syncKey, setSyncKey] = useState('');
+  const [shopNameInput, setShopNameInput] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setShopNameInput(shopName);
+  }, [shopName]);
 
   useEffect(() => {
     if (syncConfig) {
@@ -165,6 +171,49 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleWipeDatabase = () => {
+    Alert.alert(
+      'Reset Local Database',
+      'This will clear all local data and re-sync from the server. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset & Re-sync',
+          style: 'destructive',
+          onPress: async () => {
+            setSaving(true);
+            try {
+              await database.write(async () => {
+                await database.unsafeResetDatabase();
+              });
+              setLastSyncTime('1970-01-01T00:00:00.000Z');
+              Toast.show({
+                type: 'success',
+                text1: 'Database Cleared',
+                text2: 'Re-syncing with server...',
+              });
+              await runSync(database);
+              Toast.show({
+                type: 'success',
+                text1: 'Sync Completed',
+                text2: 'Local database has been reconstructed successfully.',
+              });
+            } catch (e: any) {
+              console.error('Failed to wipe and re-sync database:', e);
+              Toast.show({
+                type: 'error',
+                text1: 'Reset/Sync Failed',
+                text2: e.message || 'Failed to complete process.',
+              });
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getStatusColor = () => {
     switch (syncStatus) {
       case 'idle':
@@ -195,6 +244,35 @@ export default function SettingsScreen() {
     <ScreenBackground>
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: 16 }]} style={styles.scrollView}>
         
+        {/* Shop Details Configuration */}
+        <GlassView style={styles.card}>
+          <Text style={[styles.cardLabel, { color: colors.tabIconDefault }]}>
+            Shop Details
+          </Text>
+          <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 8 }]}>
+            Wholesale Shop Name
+          </Text>
+          <Text style={[styles.cardDescription, { color: colors.tabIconDefault, marginBottom: 12 }]}>
+            Define your wholesale shop name to be displayed on the dashboard and generated bills.
+          </Text>
+
+          <TextInput
+            style={[
+              styles.shopNameInput,
+              { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }
+            ]}
+            placeholder="Wholesale Ledger"
+            placeholderTextColor={colors.tabIconDefault}
+            value={shopNameInput}
+            onChangeText={(val) => {
+              setShopNameInput(val);
+              setShopName(val);
+            }}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
+        </GlassView>
+
         {/* Appearance Configuration */}
         <GlassView style={styles.card}>
           <Text style={[styles.cardLabel, { color: colors.tabIconDefault }]}>
@@ -322,17 +400,29 @@ export default function SettingsScreen() {
           </View>
         </GlassView>
 
-        {/* Disconnect Option */}
+        {/* Disconnect & Wipe Maintenance Options */}
         {syncConfig && (
-          <TouchableOpacity
-            style={[styles.disconnectBtn, { borderColor: colors.danger }]}
-            onPress={handleDisconnect}
-            disabled={testing || saving}
-          >
-            <Text style={[styles.disconnectText, { color: colors.danger }]}>
-              Disconnect Ledger
-            </Text>
-          </TouchableOpacity>
+          <View style={{ marginTop: 8 }}>
+            <TouchableOpacity
+              style={[styles.disconnectBtn, { borderColor: colors.danger }]}
+              onPress={handleDisconnect}
+              disabled={testing || saving}
+            >
+              <Text style={[styles.disconnectText, { color: colors.danger }]}>
+                Disconnect Ledger
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.wipeBtn, { borderColor: colors.warning }]}
+              onPress={handleWipeDatabase}
+              disabled={testing || saving}
+            >
+              <Text style={[styles.wipeText, { color: colors.warning }]}>
+                Wipe & Re-sync Local Database
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </ScreenBackground>
@@ -414,6 +504,13 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     textAlignVertical: 'top',
   },
+  shopNameInput: {
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
   errorText: {
     fontSize: 11,
     fontWeight: '600',
@@ -459,6 +556,19 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   disconnectText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  wipeBtn: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    borderStyle: 'dashed',
+  },
+  wipeText: {
     fontSize: 13,
     fontWeight: '700',
   },

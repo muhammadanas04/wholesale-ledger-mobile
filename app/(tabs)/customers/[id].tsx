@@ -1,33 +1,36 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Linking,
-  Share,
-  Platform,
-  StyleSheet,
-} from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import * as Clipboard from 'expo-clipboard';
-import Toast from 'react-native-toast-message';
 import { Q } from '@nozbe/watermelondb';
+import * as Clipboard from 'expo-clipboard';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Linking,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
-import { database } from '../../../db';
-import Customer from '../../../db/models/Customer';
-import Sale from '../../../db/models/Sale';
-import SaleItem from '../../../db/models/SaleItem';
-import Payment from '../../../db/models/Payment';
-import { useQuery, useRelation } from '../../../db/hooks';
-import { formatCurrency } from '../../../lib/utils';
-import { useColorScheme } from '../../../components/useColorScheme';
-import Colors from '../../../constants/Colors';
+import { DatePickerModal } from '../../../components/DatePickerModal';
 import { GlassView } from '../../../components/GlassView';
 import { ScreenBackground } from '../../../components/ScreenBackground';
+import { useColorScheme } from '../../../components/useColorScheme';
+import Colors from '../../../constants/Colors';
+import { database } from '../../../db';
+import { useQuery, useRelation } from '../../../db/hooks';
+import Customer from '../../../db/models/Customer';
+import Payment from '../../../db/models/Payment';
+import Sale from '../../../db/models/Sale';
+import SaleItem from '../../../db/models/SaleItem';
+import { formatCurrency } from '../../../lib/utils';
+import { useAppStore } from '../../../store/app';
 
 // Sub-component to render individual sale item rows
 function SaleItemRow({ item }: { item: SaleItem }) {
@@ -78,21 +81,52 @@ function SaleItemsList({ sale }: { sale: Sale }) {
 }
 
 export default function CustomerDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, referrer } = useLocalSearchParams<{ id: string; referrer?: string }>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
+  const { shopName } = useAppStore();
+
+  const handleBack = () => {
+    if (referrer === 'ledger') {
+      router.push('/ledger');
+    } else if (referrer === 'dashboard') {
+      router.push('/');
+    } else {
+      router.back();
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const backAction = () => {
+        handleBack();
+        return true;
+      };
+      const backHandler = BackHandler.addEventListener(
+        'hardwareBackPress',
+        backAction
+      );
+      return () => backHandler.remove();
+    }
+  }, [referrer, id]);
   const insets = useSafeAreaInsets();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [, setTick] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'sales' | 'payments' | 'bill'>('sales');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'bill'>('transactions');
   const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
 
   // Selection states for custom bill generation
   const [selectedSaleIds, setSelectedSaleIds] = useState<Set<string>>(new Set());
   const [selectedPaymentIds, setSelectedPaymentIds] = useState<Set<string>>(new Set());
-  const [initializedSelection, setInitializedSelection] = useState(false);
+
+  // Filter states (All/sales/payments and custom dates)
+  const [typeFilter, setTypeFilter] = useState<'all' | 'sales' | 'payments'>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [startPickerOpen, setStartPickerOpen] = useState(false);
+  const [endPickerOpen, setEndPickerOpen] = useState(false);
 
   // 1. Reactive subscription to Customer record by ID
   useEffect(() => {
@@ -140,14 +174,61 @@ export default function CustomerDetailScreen() {
 
   const payments = useQuery(paymentsQuery);
 
-  // Initialize selection sets to include all transactions by default on load
-  useEffect(() => {
-    if (!initializedSelection && (sales.length > 0 || payments.length > 0)) {
-      setSelectedSaleIds(new Set(sales.map((s) => s.id)));
-      setSelectedPaymentIds(new Set(payments.map((p) => p.id)));
-      setInitializedSelection(true);
+  // Combine, filter, and sort transactions
+  const combinedTransactions = useMemo(() => {
+    const list: {
+      id: string;
+      type: 'sale' | 'payment';
+      amount: number;
+      discount: number;
+      date: string;
+      notes?: string;
+      createdAt?: string;
+      record: Sale | Payment;
+    }[] = [];
+
+    if (typeFilter === 'all' || typeFilter === 'sales') {
+      sales.forEach((sale) => {
+        if (startDate && sale.date < startDate) return;
+        if (endDate && sale.date > endDate) return;
+        list.push({
+          id: sale.id,
+          type: 'sale',
+          amount: sale.totalAmount,
+          discount: sale.discount || 0,
+          date: sale.date,
+          notes: sale.notes,
+          createdAt: sale.createdAt,
+          record: sale,
+        });
+      });
     }
-  }, [sales, payments, initializedSelection]);
+
+    if (typeFilter === 'all' || typeFilter === 'payments') {
+      payments.forEach((pay) => {
+        if (startDate && pay.date < startDate) return;
+        if (endDate && pay.date > endDate) return;
+        list.push({
+          id: pay.id,
+          type: 'payment',
+          amount: pay.amount,
+          discount: pay.discount || 0,
+          date: pay.date,
+          notes: pay.notes,
+          createdAt: pay.createdAt,
+          record: pay,
+        });
+      });
+    }
+
+    return list.sort((a, b) => {
+      const timeA = a.createdAt || a.date;
+      const timeB = b.createdAt || b.date;
+      return timeB.localeCompare(timeA);
+    });
+  }, [sales, payments, typeFilter, startDate, endDate]);
+
+
 
   // Calculations for all transactions (full ledger)
   const totalSalesPaise = useMemo(() => {
@@ -193,21 +274,37 @@ export default function CustomerDetailScreen() {
     return `${dd}/${mm}/${yyyy}`;
   }, []);
 
+  // Calculations for selected transactions formulas
+  const selectedSalesStr = useMemo(() => {
+    const activeSales = sales.filter((s) => selectedSaleIds.has(s.id));
+    if (activeSales.length === 0) return formatCurrency(0);
+    const sortedSales = [...activeSales].sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date));
+    const formatted = sortedSales.map((s) => formatCurrency(s.totalAmount));
+    if (sortedSales.length === 1) return formatted[0];
+    return `(${formatted.join(' + ')}) \n= ${formatCurrency(selectedSalesPaise)}`;
+  }, [sales, selectedSaleIds, selectedSalesPaise]);
+
+  const selectedPaymentsStr = useMemo(() => {
+    const activePayments = payments.filter((p) => selectedPaymentIds.has(p.id));
+    if (activePayments.length === 0) return formatCurrency(0);
+    const sortedPayments = [...activePayments].sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date));
+    const formatted = sortedPayments.map((p) => formatCurrency(p.amount));
+    if (sortedPayments.length === 1) return formatted[0];
+    return `(${formatted.join(' + ')}) \n= ${formatCurrency(selectedPaidPaise)}`;
+  }, [payments, selectedPaymentIds, selectedPaidPaise]);
+
   // 5. Custom Bill Text Generation based on selections
   const billText = useMemo(() => {
     if (!customer) return '';
-    return `Wholesale Ledger
+    return `${shopName}
 Date: ${formattedDate}
 
-Customer: ${customer.name}
-Phone: ${customer.phone || 'N/A'}
-
-Selected Sales:    +${formatCurrency(selectedSalesPaise)}
-Selected Received: -${formatCurrency(selectedPaidPaise)}
-Selected Discount: -${formatCurrency(selectedDiscountsPaise)}
-──────────────────────
-Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
-  }, [customer, formattedDate, selectedSalesPaise, selectedPaidPaise, selectedDiscountsPaise, selectedBalanceDue]);
+Sales:       ${selectedSalesStr}
+Received:    ${selectedPaymentsStr}
+Discount:    -${formatCurrency(selectedDiscountsPaise)}
+────────────────────────
+Balance Due: ${formatCurrency(selectedBalanceDue)}`;
+  }, [customer, formattedDate, selectedSalesStr, selectedPaymentsStr, selectedDiscountsPaise, selectedBalanceDue]);
 
   if (loading) {
     return (
@@ -336,26 +433,71 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
     setSelectedPaymentIds(next);
   };
 
-  // Select/Deselect All Transactions
+  // Select/Deselect All Filtered Transactions
   const toggleSelectAll = () => {
-    const allSalesSelected = selectedSaleIds.size === sales.length;
-    const allPaymentsSelected = selectedPaymentIds.size === payments.length;
+    const allFilteredSelected = combinedTransactions.length > 0 && combinedTransactions.every((item) => {
+      if (item.type === 'sale') return selectedSaleIds.has(item.id);
+      return selectedPaymentIds.has(item.id);
+    });
 
-    if (allSalesSelected && allPaymentsSelected) {
-      // Deselect all
-      setSelectedSaleIds(new Set());
-      setSelectedPaymentIds(new Set());
+    if (allFilteredSelected) {
+      // Deselect all filtered items
+      const nextSales = new Set(selectedSaleIds);
+      const nextPayments = new Set(selectedPaymentIds);
+      combinedTransactions.forEach((item) => {
+        if (item.type === 'sale') nextSales.delete(item.id);
+        else nextPayments.delete(item.id);
+      });
+      setSelectedSaleIds(nextSales);
+      setSelectedPaymentIds(nextPayments);
     } else {
-      // Select all
-      setSelectedSaleIds(new Set(sales.map((s) => s.id)));
-      setSelectedPaymentIds(new Set(payments.map((p) => p.id)));
+      // Select all filtered items
+      const nextSales = new Set(selectedSaleIds);
+      const nextPayments = new Set(selectedPaymentIds);
+      combinedTransactions.forEach((item) => {
+        if (item.type === 'sale') nextSales.add(item.id);
+        else nextPayments.add(item.id);
+      });
+      setSelectedSaleIds(nextSales);
+      setSelectedPaymentIds(nextPayments);
     }
   };
 
-  const isAllSelected = selectedSaleIds.size === sales.length && selectedPaymentIds.size === payments.length;
+  const isAllSelected = useMemo(() => {
+    if (combinedTransactions.length === 0) return false;
+    return combinedTransactions.every((item) => {
+      if (item.type === 'sale') return selectedSaleIds.has(item.id);
+      return selectedPaymentIds.has(item.id);
+    });
+  }, [combinedTransactions, selectedSaleIds, selectedPaymentIds]);
 
   return (
     <ScreenBackground>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleBack} style={{ marginLeft: 15, padding: 8 }}>
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                tintColor={colors.tint}
+                size={22}
+              />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push(`/customers/new?editId=${customer.id}`)}
+              style={{ marginRight: 15 }}
+            >
+              <SymbolView
+                name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }}
+                tintColor={colors.tint}
+                size={20}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       {/* Set padding top for safe area in custom stack headers */}
       <View style={styles.rootContainer}>
         <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scrollView}>
@@ -443,7 +585,7 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
           </GlassView>
 
           {/* Selection tools / select all bar */}
-          {(activeTab === 'sales' || activeTab === 'payments') && (sales.length > 0 || payments.length > 0) && (
+          {activeTab === 'transactions' && combinedTransactions.length > 0 && (
             <View style={styles.selectionBar}>
               <TouchableOpacity
                 style={[styles.selectAllBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -470,7 +612,7 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
 
           {/* Tab Selection Bar */}
           <View style={[styles.tabBar, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-            {(['sales', 'payments', 'bill'] as const).map((tab) => (
+            {(['transactions', 'bill'] as const).map((tab) => (
               <TouchableOpacity
                 key={tab}
                 style={[
@@ -482,13 +624,13 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
                 <Text
                   style={[
                     styles.tabButtonText,
-                    { 
+                    {
                       color: activeTab === tab ? colors.tint : colors.tabIconDefault,
                       fontWeight: activeTab === tab ? '700' : '500',
                     }
                   ]}
                 >
-                  {tab === 'bill' ? 'Share Bill' : tab === 'sales' ? 'Sales' : 'Payments'}
+                  {tab === 'bill' ? 'Share Bill' : 'Transactions'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -496,10 +638,113 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
 
           {/* Tab Content Panels */}
           <View style={styles.tabContentContainer}>
-            {/* Sales Tab Panel */}
-            {activeTab === 'sales' && (
+            {/* Transactions Tab Panel */}
+            {activeTab === 'transactions' && (
               <View>
-                {sales.length === 0 ? (
+                {/* Filters Wrapper */}
+                <View style={styles.filtersWrapper}>
+                  {/* Type filter segment */}
+                  <View style={[styles.segmentContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                    {(['all', 'sales', 'payments'] as const).map(type => (
+                      <TouchableOpacity
+                        key={type}
+                        onPress={() => setTypeFilter(type)}
+                        style={[
+                          styles.segmentButton,
+                          typeFilter === type && {
+                            backgroundColor: colors.surfaceSolid,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.segmentText,
+                            {
+                              color: typeFilter === type ? colors.tint : colors.tabIconDefault,
+                              fontWeight: typeFilter === type ? '700' : '500'
+                            }
+                          ]}
+                        >
+                          {type === 'all' ? 'All' : type === 'sales' ? 'Sales' : 'Paid'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Date Range Fields */}
+                  <View style={styles.dateRangeRow}>
+                    <View style={[styles.dateInputWrapper, { marginRight: 6 }]}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => setStartPickerOpen(true)}
+                        style={[styles.dateInputContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      >
+                        <View style={styles.dateInputTextCol}>
+                          <Text style={[styles.dateInputLabel, { color: colors.tabIconDefault }]}>Start Date</Text>
+                          <Text style={[styles.dateInputField, { color: colors.text }]}>
+                            {startDate || 'All Time'}
+                          </Text>
+                        </View>
+                        {startDate ? (
+                          <TouchableOpacity onPress={() => setStartDate('')} style={styles.clearDateBtn}>
+                            <SymbolView
+                              name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+                              tintColor={colors.tabIconDefault}
+                              size={14}
+                            />
+                          </TouchableOpacity>
+                        ) : null}
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.dateInputWrapper, { marginLeft: 6 }]}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => setEndPickerOpen(true)}
+                        style={[styles.dateInputContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      >
+                        <View style={styles.dateInputTextCol}>
+                          <Text style={[styles.dateInputLabel, { color: colors.tabIconDefault }]}>End Date</Text>
+                          <Text style={[styles.dateInputField, { color: colors.text }]}>
+                            {endDate || 'All Time'}
+                          </Text>
+                        </View>
+                        {endDate ? (
+                          <TouchableOpacity onPress={() => setEndDate('')} style={styles.clearDateBtn}>
+                            <SymbolView
+                              name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+                              tintColor={colors.tabIconDefault}
+                              size={14}
+                            />
+                          </TouchableOpacity>
+                        ) : null}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Modals for Date Pickers */}
+                <DatePickerModal
+                  visible={startPickerOpen}
+                  value={startDate}
+                  onChange={setStartDate}
+                  onClose={() => setStartPickerOpen(false)}
+                />
+
+                <DatePickerModal
+                  visible={endPickerOpen}
+                  value={endDate}
+                  onChange={setEndDate}
+                  onClose={() => setEndPickerOpen(false)}
+                />
+
+                {/* Combined List of Transactions */}
+                {combinedTransactions.length === 0 ? (
                   <View style={styles.emptyPanel}>
                     <SymbolView
                       name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
@@ -507,140 +752,124 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
                       size={44}
                     />
                     <Text style={[styles.emptyPanelText, { color: colors.tabIconDefault }]}>
-                      No sales recorded for this customer.
+                      No transactions match the selected filters.
                     </Text>
                   </View>
                 ) : (
-                  sales.map((sale) => {
-                    const isExpanded = expandedSaleId === sale.id;
-                    const isSelected = selectedSaleIds.has(sale.id);
-                    return (
-                      <GlassView
-                        key={sale.id}
-                        style={styles.saleRowContainer}
-                        borderRadius={16}
-                      >
-                        <View style={styles.saleRowHeader}>
-                          {/* Checkbox selector */}
-                          <TouchableOpacity
-                            onPress={() => toggleSaleSelection(sale.id)}
-                            style={styles.checkboxContainer}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: isSelected ? 'checkmark.circle.fill' : 'circle',
-                                android: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                                web: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                              }}
-                              tintColor={isSelected ? colors.tint : colors.tabIconDefault}
-                              size={18}
-                            />
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.saleRowClickable}
-                            onPress={() => setExpandedSaleId(isExpanded ? null : sale.id)}
-                          >
-                            <View style={styles.saleDetailsCol}>
-                              <Text style={[styles.transactionTitle, { color: colors.text }]}>
-                                Sale — {sale.date}
-                              </Text>
-                              {sale.notes && (
-                                <Text
-                                  style={[styles.transactionNotes, { color: colors.tabIconDefault }]}
-                                  numberOfLines={1}
-                                >
-                                  {sale.notes}
-                                </Text>
-                              )}
-                            </View>
-                            <View style={styles.saleAmountRow}>
-                              <Text style={[styles.saleAmountValue, { color: colors.danger }]}>
-                                +{formatCurrency(sale.totalAmount)}
-                              </Text>
+                  combinedTransactions.map((item) => {
+                    if (item.type === 'sale') {
+                      const sale = item.record as Sale;
+                      const isExpanded = expandedSaleId === sale.id;
+                      const isSelected = selectedSaleIds.has(sale.id);
+                      return (
+                        <GlassView
+                          key={`sale-${sale.id}`}
+                          style={styles.saleRowContainer}
+                          borderRadius={16}
+                        >
+                          <View style={styles.saleRowHeader}>
+                            {/* Checkbox selector */}
+                            <TouchableOpacity
+                              onPress={() => toggleSaleSelection(sale.id)}
+                              style={styles.checkboxContainer}
+                            >
                               <SymbolView
                                 name={{
-                                  ios: isExpanded ? 'chevron.up' : 'chevron.down',
-                                  android: isExpanded ? 'expand_less' : 'expand_more',
-                                  web: isExpanded ? 'expand_less' : 'expand_more',
+                                  ios: isSelected ? 'checkmark.circle.fill' : 'circle',
+                                  android: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                  web: isSelected ? 'check_circle' : 'radio_button_unchecked',
                                 }}
-                                tintColor={colors.tabIconDefault}
-                                size={14}
-                                style={styles.arrowIcon}
+                                tintColor={isSelected ? colors.tint : colors.tabIconDefault}
+                                size={18}
                               />
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                        {isExpanded ? <SaleItemsList sale={sale} /> : null}
-                      </GlassView>
-                    );
-                  })
-                )}
-              </View>
-            )}
+                            </TouchableOpacity>
 
-            {/* Payments Tab Panel */}
-            {activeTab === 'payments' && (
-              <View>
-                {payments.length === 0 ? (
-                  <View style={styles.emptyPanel}>
-                    <SymbolView
-                      name={{ ios: 'indianrupeesign.square', android: 'payments', web: 'payments' }}
-                      tintColor={colors.tabIconDefault}
-                      size={44}
-                    />
-                    <Text style={[styles.emptyPanelText, { color: colors.tabIconDefault }]}>
-                      No payments recorded for this customer.
-                    </Text>
-                  </View>
-                ) : (
-                  payments.map((payment) => {
-                    const isSelected = selectedPaymentIds.has(payment.id);
-                    return (
-                      <GlassView
-                        key={payment.id}
-                        style={styles.paymentRowContainer}
-                        borderRadius={16}
-                      >
-                        <View style={styles.paymentCheckboxRow}>
-                          <TouchableOpacity
-                            onPress={() => togglePaymentSelection(payment.id)}
-                            style={styles.checkboxContainer}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: isSelected ? 'checkmark.circle.fill' : 'circle',
-                                android: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                                web: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                              }}
-                              tintColor={isSelected ? colors.tint : colors.tabIconDefault}
-                              size={18}
-                            />
-                          </TouchableOpacity>
-
-                          <View style={styles.paymentDetailsRow}>
-                            <View style={styles.paymentDetailsLeft}>
-                              <Text style={[styles.transactionTitle, { color: colors.text }]}>
-                                Payment — {payment.date}
-                              </Text>
-                              {payment.notes && (
-                                <Text style={[styles.transactionNotes, { color: colors.tabIconDefault }]}>
-                                  {payment.notes}
+                            <TouchableOpacity
+                              style={styles.saleRowClickable}
+                              onPress={() => setExpandedSaleId(isExpanded ? null : sale.id)}
+                            >
+                              <View style={styles.saleDetailsCol}>
+                                <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                                  Sale — {sale.date}
                                 </Text>
-                              )}
-                              {payment.discount > 0 && (
-                                <Text style={[styles.discountTagText, { color: colors.success }]}>
-                                  Discount Applied: {formatCurrency(payment.discount)}
+                                {sale.notes && (
+                                  <Text
+                                    style={[styles.transactionNotes, { color: colors.tabIconDefault }]}
+                                    numberOfLines={1}
+                                  >
+                                    {sale.notes}
+                                  </Text>
+                                )}
+                              </View>
+                              <View style={styles.saleAmountRow}>
+                                <Text style={[styles.saleAmountValue, { color: colors.danger }]}>
+                                  +{formatCurrency(sale.totalAmount)}
                                 </Text>
-                              )}
-                            </View>
-                            <Text style={[styles.paymentAmountText, { color: colors.success }]}>
-                              -{formatCurrency(payment.amount)}
-                            </Text>
+                                <SymbolView
+                                  name={{
+                                    ios: isExpanded ? 'chevron.up' : 'chevron.down',
+                                    android: isExpanded ? 'expand_less' : 'expand_more',
+                                    web: isExpanded ? 'expand_less' : 'expand_more',
+                                  }}
+                                  tintColor={colors.tabIconDefault}
+                                  size={14}
+                                  style={styles.arrowIcon}
+                                />
+                              </View>
+                            </TouchableOpacity>
                           </View>
-                        </View>
-                      </GlassView>
-                    );
+                          {isExpanded ? <SaleItemsList sale={sale} /> : null}
+                        </GlassView>
+                      );
+                    } else {
+                      const payment = item.record as Payment;
+                      const isSelected = selectedPaymentIds.has(payment.id);
+                      return (
+                        <GlassView
+                          key={`payment-${payment.id}`}
+                          style={styles.paymentRowContainer}
+                          borderRadius={16}
+                        >
+                          <View style={styles.paymentCheckboxRow}>
+                            <TouchableOpacity
+                              onPress={() => togglePaymentSelection(payment.id)}
+                              style={styles.checkboxContainer}
+                            >
+                              <SymbolView
+                                name={{
+                                  ios: isSelected ? 'checkmark.circle.fill' : 'circle',
+                                  android: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                  web: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                }}
+                                tintColor={isSelected ? colors.tint : colors.tabIconDefault}
+                                size={18}
+                              />
+                            </TouchableOpacity>
+
+                            <View style={styles.paymentDetailsRow}>
+                              <View style={styles.paymentDetailsLeft}>
+                                <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                                  Payment — {payment.date}
+                                </Text>
+                                {payment.notes && (
+                                  <Text style={[styles.transactionNotes, { color: colors.tabIconDefault }]}>
+                                    {payment.notes}
+                                  </Text>
+                                )}
+                                {payment.discount > 0 && (
+                                  <Text style={[styles.discountTagText, { color: colors.success }]}>
+                                    Discount Applied: {formatCurrency(payment.discount)}
+                                  </Text>
+                                )}
+                              </View>
+                              <Text style={[styles.paymentAmountText, { color: colors.success }]}>
+                                -{formatCurrency(payment.amount)}
+                              </Text>
+                            </View>
+                          </View>
+                        </GlassView>
+                      );
+                    }
                   })
                 )}
               </View>
@@ -716,14 +945,14 @@ Balance Due:       ${formatCurrency(selectedBalanceDue)}`;
           <View style={styles.footerActions}>
             <TouchableOpacity
               style={[styles.footerBtn, { backgroundColor: colors.accent }]}
-              onPress={() => router.push(`/ledger/new-payment?customerId=${customer.id}`)}
+              onPress={() => router.push(`/ledger/new-payment?customerId=${customer.id}&referrer=customer-details`)}
             >
               <Text style={styles.footerBtnText}>Record Payment</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.footerBtn, { backgroundColor: colors.tint }]}
-              onPress={() => router.push(`/ledger/new-sale?customerId=${customer.id}`)}
+              onPress={() => router.push(`/ledger/new-sale?customerId=${customer.id}&referrer=customer-details`)}
             >
               <Text style={styles.footerBtnText}>New Sale</Text>
             </TouchableOpacity>
@@ -1080,5 +1309,61 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
     fontWeight: '700',
+  },
+  filtersWrapper: {
+    marginBottom: 16,
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 3,
+    marginBottom: 10,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+  },
+  segmentText: {
+    fontSize: 11,
+  },
+  dateRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateInputWrapper: {
+    flex: 1,
+  },
+  dateInputContainer: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+  },
+  dateInputTextCol: {
+    flex: 1,
+  },
+  dateInputLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  dateInputField: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  clearDateBtn: {
+    padding: 4,
+    marginLeft: 4,
   },
 });

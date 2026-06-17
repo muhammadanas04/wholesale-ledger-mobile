@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: SESSIONS 18-19 COMPLETE (Recent Activity Paddings Fixed, Dark Theme Upgraded, Customer Loading Reactivity Resolved)
+## Status: SESSIONS 18-20 COMPLETE (Referrer Back Navigation, Custom Date Pickers, Customer Filters Implemented)
 
 ---
 
@@ -305,11 +305,33 @@ After every AI coding session, paste a summary of what was built, what changed, 
   - **Light Mode**: Background/Canvas color `#EAEAE6` (warm beige-grey) and `#E5E5DF` gradient; Card background `#FFFFFF` (pure solid white); borders `#D2D2CC` (warm grey); high-contrast deep text `#111115`.
   - **Dark Mode**: Background/Canvas color `#121212` (dark neutral grey) and `#151515` gradient; Card background `#1C1C1E` (iOS-style dark card surface); borders `#2C2C2E` (subtle dark grey); creamy text `#F2F2F7`.
 - **Recent Activity Layout Spacing**: Revamped the `ActivityRow` list rows across `app/(tabs)/index.tsx` by expanding item spacing (vertical padding to `15px`, horizontal padding to `18px`), increasing key typography sizes (customer name to `15px`, sub-metadata to `11px`, price amount to `15px`), enlarging the type icon containers to `38px`, and increasing symbol size to `20px` for a unified, modern, and aligned look.
-- **Tabular Ledger Layout (Desktop-style Grid)**: Redesigned the Ledger screen in `app/(tabs)/ledger/index.tsx` to display as a flat, responsive grid table matching the desktop version. Wrapped the grid in a horizontal `ScrollView` to fit all columns on mobile cleanly. Designed a sticky uppercase table header and 6 distinct columns: `date` (left-aligned), `customer` (left-aligned), `sale` (debit, right-aligned), `paid` (credit, right-aligned), `discount` (right-aligned), and `final value` (balance, right-aligned, bold).
+- **Tabular Ledger Layout (Desktop-style Grid)**: Redesigned the Ledger screen in `app/(tabs)/ledger/index.tsx` to display as a flat, responsive grid table matching the desktop version. Wrapped the grid in a horizontal `ScrollView` to fit all columns on mobile cleanly. Designed a sticky uppercase table header and 6 distinct columns: `date` (left-aligned), `customer` (left-aligned), `sale` (debit, right-aligned), `paid` (credit, right-aligned), `discount` (right-aligned), and `final value` (balance, right-aligned, bold). Fixed column stacking alignment bugs under `Pressable` by wrapping cells inside an immediate `<View style={styles.row}>` parent layout container.
 - **Verified Type Safety & Bundling**: Checked and verified zero compiler errors (`npx tsc --noEmit` succeeds) and successfully compiled native Hermes bundles.
 
 **Current working state:**
 - The project is fully completed, verified, and compiling cleanly. Both Android and iOS native Hermes bundles export successfully without errors.
+
+---
+
+### Session 20 — June 17, 2026
+**What we built / fixed:**
+- **Custom Referrer Back Navigation System**:
+  - Implemented programmatic referrer-aware back routing to resolve nested navigation stack loops across tabs.
+  - Setup custom header back buttons (`headerLeft` config on `Stack.Screen`) and Android hardware `BackHandler` listeners in Customer Details, New Sale, and Record Payment screens.
+  - Replaced native `router.back()` calls inside transaction save handlers in `new-sale.tsx` and `new-payment.tsx` to automatically redirect users back to the customer details page with updated records.
+- **Date Picker Modals Integration**:
+  - Replaced the date input fields from being edited with a keyboard like normal text to using the custom calendar date picker modal component in both `new-sale.tsx` and `new-payment.tsx`.
+- **Customer Details Filters**:
+  - Integrated filtering in `customers/[id].tsx` (Customer Details) identical to the ledger: type segment selectors (All/Sales/Payments) and custom date picker modal filters.
+- **Clients Tab Add Customer Button**:
+  - Added an "Add Customer" button (`person.fill.badge.plus` / `person_add`) to the top right of the navigation header on the customers index tab screen (`customers/index.tsx`) to make it easily accessible.
+- **Shareable Bill Formula Detail Generation**:
+  - Overhauled the text generator for custom bills so that selecting multiple sales/payments formats as a sum formula: `+(sale#1 + sale#2) = total#` and `-(payment#1 + payment#2) = total#` instead of directly outputting total sums.
+- **Verified Type Safety & Bundling**:
+  - Checked and verified zero compiler errors (`npx tsc --noEmit` succeeds).
+
+**Current working state:**
+- The project is fully completed, verified, and compiling cleanly.
 
 ---
 

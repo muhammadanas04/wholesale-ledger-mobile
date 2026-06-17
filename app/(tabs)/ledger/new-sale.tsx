@@ -12,8 +12,9 @@ import {
   Platform,
   FlatList,
   StyleSheet,
+  BackHandler,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import Toast from 'react-native-toast-message';
 import * as Crypto from 'expo-crypto';
@@ -32,17 +33,19 @@ import { useColorScheme } from '../../../components/useColorScheme';
 import Colors from '../../../constants/Colors';
 import { GlassView } from '../../../components/GlassView';
 import { ScreenBackground } from '../../../components/ScreenBackground';
+import { DatePickerModal } from '../../../components/DatePickerModal';
 
 interface LocalLineItem {
   id: string;
   product: Product;
   qtyStr: string;
   priceStr: string;
+  discountStr: string;
   weightStr: string;
 }
 
 export default function NewSaleScreen() {
-  const { customerId } = useLocalSearchParams<{ customerId?: string }>();
+  const { customerId, referrer } = useLocalSearchParams<{ customerId?: string; referrer?: string }>();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
@@ -51,8 +54,10 @@ export default function NewSaleScreen() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().split('T')[0]); // YYYY-MM-DD
   const [lineItems, setLineItems] = useState<LocalLineItem[]>([]);
+  const [isMultipleItems, setIsMultipleItems] = useState(false);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Selector Modal Visibility States
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
@@ -76,6 +81,28 @@ export default function NewSaleScreen() {
         });
     }
   }, [customerId]);
+
+  const handleNavigationBack = () => {
+    if (referrer === 'customer-details' && selectedCustomer) {
+      router.push(`/customers/${selectedCustomer.id}?referrer=ledger`);
+    } else {
+      router.back();
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const backAction = () => {
+        handleNavigationBack();
+        return true;
+      };
+      const backHandler = BackHandler.addEventListener(
+        'hardwareBackPress',
+        backAction
+      );
+      return () => backHandler.remove();
+    }
+  }, [referrer, selectedCustomer]);
 
   // 2. Query customers reactively for Customer Picker
   const customersQuery = useMemo(() => {
@@ -108,14 +135,41 @@ export default function NewSaleScreen() {
 
   const products = useQuery(productsQuery);
 
+  // 3.5 Query all products independently to count inventory items
+  const allProductsQuery = useMemo(() => {
+    return database.collections.get<Product>('products').query();
+  }, []);
+  const allProducts = useQuery(allProductsQuery);
+
+  // Automatically select the single product if only one exists in the database
+  useEffect(() => {
+    if (allProducts.length === 1 && lineItems.length === 0) {
+      const singleProduct = allProducts[0];
+      const newItem: LocalLineItem = {
+        id: Crypto.randomUUID(),
+        product: singleProduct,
+        qtyStr: '1',
+        priceStr: '',
+        discountStr: '',
+        weightStr: '',
+      };
+      setLineItems([newItem]);
+    }
+  }, [allProducts, lineItems.length]);
+
   // Live calculation of line item totals in paise to prevent float rounding errors
   const lineItemPaiseTotals = useMemo(() => {
     return lineItems.map((item) => {
       const qty = parseFloat(item.qtyStr) || 0;
       const price = parseFloat(item.priceStr) || 0;
-      return Math.round(qty * price * 100);
+      if (!isMultipleItems) {
+        const discount = parseFloat(item.discountStr) || 0;
+        return Math.max(0, Math.round((price - discount) * 100));
+      } else {
+        return Math.round(qty * price * 100);
+      }
     });
-  }, [lineItems]);
+  }, [lineItems, isMultipleItems]);
 
   const invoiceTotalPaise = useMemo(() => {
     return lineItemPaiseTotals.reduce((sum, val) => sum + val, 0);
@@ -127,6 +181,7 @@ export default function NewSaleScreen() {
       product,
       qtyStr: '1',
       priceStr: '',
+      discountStr: '',
       weightStr: '',
     };
     setLineItems((prev) => [...prev, newItem]);
@@ -134,7 +189,11 @@ export default function NewSaleScreen() {
     setProductSearch('');
   };
 
-  const handleUpdateLineItem = (id: string, field: 'qtyStr' | 'priceStr' | 'weightStr', value: string) => {
+  const handleUpdateLineItem = (
+    id: string,
+    field: 'qtyStr' | 'priceStr' | 'discountStr' | 'weightStr',
+    value: string
+  ) => {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
@@ -210,6 +269,18 @@ export default function NewSaleScreen() {
         });
         return;
       }
+
+      if (!isMultipleItems) {
+        const discount = parseFloat(item.discountStr || '0');
+        if (isNaN(discount) || discount < 0 || discount > price) {
+          Toast.show({
+            type: 'error',
+            text1: 'Validation Error',
+            text2: `Discount for ${item.product.name} cannot be negative or exceed the total price.`,
+          });
+          return;
+        }
+      }
     }
 
     setSaving(true);
@@ -223,8 +294,20 @@ export default function NewSaleScreen() {
           sale._raw.id = saleId;
           sale.customerId = selectedCustomer.id;
           sale.date = cleanDate;
-          sale.totalAmount = invoiceTotalPaise;
-          sale.discount = 0;
+
+          let totalVal = invoiceTotalPaise;
+          let discVal = 0;
+
+          if (!isMultipleItems && lineItems.length > 0) {
+            const singleItem = lineItems[0];
+            const totalPrice = parseFloat(singleItem.priceStr) || 0;
+            const discount = parseFloat(singleItem.discountStr) || 0;
+            totalVal = Math.round(totalPrice * 100);
+            discVal = Math.round(discount * 100);
+          }
+
+          sale.totalAmount = totalVal;
+          sale.discount = discVal;
           sale.notes = notes.trim() || undefined;
           sale.createdAt = timestamp;
           sale.updatedAt = timestamp;
@@ -234,19 +317,30 @@ export default function NewSaleScreen() {
         // 2. Create Sale Items
         for (let i = 0; i < lineItems.length; i++) {
           const item = lineItems[i];
-          const qty = parseFloat(item.qtyStr);
-          const priceRupees = parseFloat(item.priceStr);
+          const qty = parseFloat(item.qtyStr) || 0;
+          const priceStrVal = parseFloat(item.priceStr) || 0;
           const weight = parseFloat(item.weightStr) || undefined;
           const itemTotalPaise = lineItemPaiseTotals[i];
+
+          let itemUnitPricePaise = 0;
+          let itemTotalPricePaise = 0;
+
+          if (!isMultipleItems) {
+            itemUnitPricePaise = qty > 0 ? Math.round((priceStrVal / qty) * 100) : 0;
+            itemTotalPricePaise = Math.round(priceStrVal * 100);
+          } else {
+            itemUnitPricePaise = Math.round(priceStrVal * 100);
+            itemTotalPricePaise = itemTotalPaise;
+          }
 
           await database.collections.get<SaleItem>('sale_items').create((saleItem) => {
             saleItem._raw.id = Crypto.randomUUID();
             saleItem.saleId = saleId;
             saleItem.productId = item.product.id;
             saleItem.qty = qty;
-            saleItem.unitPrice = Math.round(priceRupees * 100);
+            saleItem.unitPrice = itemUnitPricePaise;
             saleItem.weight = weight;
-            saleItem.totalPrice = itemTotalPaise;
+            saleItem.totalPrice = itemTotalPricePaise;
             saleItem.createdAt = timestamp;
             saleItem.updatedAt = timestamp;
             saleItem.synced = 0;
@@ -271,7 +365,7 @@ export default function NewSaleScreen() {
         console.error('Post-sale creation sync failed:', err);
       });
 
-      router.back();
+      handleNavigationBack();
     } catch (e: any) {
       console.error('Failed to save sale transaction:', e);
       Toast.show({
@@ -286,6 +380,19 @@ export default function NewSaleScreen() {
 
   return (
     <ScreenBackground>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleNavigationBack} style={{ marginLeft: 15, padding: 8 }}>
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                tintColor={colors.tint}
+                size={22}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -343,39 +450,63 @@ export default function NewSaleScreen() {
             <Text style={[styles.dateLabel, { color: colors.text }]}>
               Invoice Date
             </Text>
-            <TextInput
-              style={[styles.dateInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.tabIconDefault}
-              value={saleDate}
-              onChangeText={setSaleDate}
-              autoCorrect={false}
-              maxLength={10}
-            />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setDatePickerOpen(true)}
+              style={[styles.dateInput, { backgroundColor: colors.background, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}
+            >
+              <Text style={{ color: colors.text, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 13 }}>
+                {saleDate}
+              </Text>
+            </TouchableOpacity>
           </GlassView>
+
+          <DatePickerModal
+            visible={datePickerOpen}
+            value={saleDate}
+            onChange={setSaleDate}
+            onClose={() => setDatePickerOpen(false)}
+          />
 
           {/* Invoice Items Block */}
           <GlassView style={styles.card}>
             <View style={styles.itemsHeader}>
-              <Text style={[styles.itemsTitle, { color: colors.text }]}>
-                Line Items
-              </Text>
-              <TouchableOpacity
-                onPress={() => setProductModalVisible(true)}
-                style={[
-                  styles.addItemBtn,
-                  { backgroundColor: colorScheme === 'dark' ? 'rgba(45, 212, 191, 0.12)' : 'rgba(13, 148, 136, 0.06)' }
-                ]}
-              >
-                <SymbolView
-                  name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-                  tintColor={colors.tint}
-                  size={16}
-                />
-                <Text style={[styles.addItemBtnText, { color: colors.tint }]}>
-                  Add Item
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.itemsTitle, { color: colors.text }]}>
+                  Line Items
                 </Text>
-              </TouchableOpacity>
+                {allProducts.length > 1 && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setIsMultipleItems(prev => !prev);
+                    }}
+                    style={[styles.modeToggleBtn, { borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.modeToggleText, { color: colors.tint }]}>
+                      {isMultipleItems ? 'Multiple Mode' : 'Single Mode'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {allProducts.length > 1 && (!isMultipleItems && lineItems.length === 0 || isMultipleItems) && (
+                <TouchableOpacity
+                  onPress={() => setProductModalVisible(true)}
+                  style={[
+                    styles.addItemBtn,
+                    { backgroundColor: colorScheme === 'dark' ? 'rgba(45, 212, 191, 0.12)' : 'rgba(13, 148, 136, 0.06)' }
+                  ]}
+                >
+                  <SymbolView
+                    name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
+                    tintColor={colors.tint}
+                    size={16}
+                  />
+                  <Text style={[styles.addItemBtnText, { color: colors.tint }]}>
+                    Add Item
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {lineItems.length === 0 ? (
@@ -436,18 +567,35 @@ export default function NewSaleScreen() {
                           />
                         </View>
 
-                        {/* Price */}
+                        {/* Price (Rate in Multiple, Total Price in Single) */}
                         <View style={[styles.inputCol, { flex: 1.5 }]}>
-                          <Text style={[styles.inputColLabel, { color: colors.tabIconDefault }]}>Price (₹)</Text>
+                          <Text style={[styles.inputColLabel, { color: colors.tabIconDefault }]}>
+                            {isMultipleItems ? 'Price (₹)' : 'Total Price (₹)'}
+                          </Text>
                           <TextInput
                             style={[styles.smallInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                            placeholder="Rate"
+                            placeholder={isMultipleItems ? 'Rate' : 'Total'}
                             placeholderTextColor={colors.tabIconDefault}
                             keyboardType="decimal-pad"
                             value={item.priceStr}
                             onChangeText={(val) => handleUpdateLineItem(item.id, 'priceStr', val)}
                           />
                         </View>
+
+                        {/* Discount (Only in Single Mode) */}
+                        {!isMultipleItems && (
+                          <View style={[styles.inputCol, { flex: 1.2 }]}>
+                            <Text style={[styles.inputColLabel, { color: colors.tabIconDefault }]}>Disc (₹)</Text>
+                            <TextInput
+                              style={[styles.smallInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                              placeholder="0"
+                              placeholderTextColor={colors.tabIconDefault}
+                              keyboardType="decimal-pad"
+                              value={item.discountStr}
+                              onChangeText={(val) => handleUpdateLineItem(item.id, 'discountStr', val)}
+                            />
+                          </View>
+                        )}
 
                         {/* Weight */}
                         <View style={styles.inputCol}>
@@ -976,5 +1124,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '600',
+  },
+  modeToggleBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 10,
+  },
+  modeToggleText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });
