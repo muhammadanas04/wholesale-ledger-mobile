@@ -16,11 +16,15 @@ interface AppState {
   syncStatus: SyncStatus;
   themeSetting: ThemeSetting;
   shopName: string;
+  tmpRetentionDays: number;
+  tabBarHidden: boolean;
   setSyncConfig: (config: SyncConfig | null) => void;
   setLastSyncTime: (time: string) => void;
   setSyncStatus: (status: SyncStatus) => void;
   setThemeSetting: (theme: ThemeSetting) => Promise<void>;
   setShopName: (name: string) => Promise<void>;
+  setTmpRetentionDays: (days: number) => Promise<void>;
+  setTabBarHidden: (hidden: boolean) => void;
   initStore: () => Promise<void>;
 }
 
@@ -30,6 +34,8 @@ export const useAppStore = create<AppState>((set) => ({
   syncStatus: 'not-configured',
   themeSetting: 'system',
   shopName: 'Wholesale Ledger',
+  tmpRetentionDays: 3,
+  tabBarHidden: false,
   
   setSyncConfig: (config) => set({ 
     syncConfig: config, 
@@ -37,6 +43,7 @@ export const useAppStore = create<AppState>((set) => ({
   }),
   setLastSyncTime: (time) => set({ lastSyncTime: time }),
   setSyncStatus: (status) => set({ syncStatus: status }),
+  setTabBarHidden: (hidden) => set({ tabBarHidden: hidden }),
   
   setThemeSetting: async (theme) => {
     set({ themeSetting: theme });
@@ -57,6 +64,16 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
 
+  setTmpRetentionDays: async (days) => {
+    const validDays = Math.max(1, Math.min(30, days)); // clamp 1–30
+    set({ tmpRetentionDays: validDays });
+    try {
+      await SecureStore.setItemAsync('tmp_retention_days', String(validDays));
+    } catch (e) {
+      console.error('Failed to save tmp retention days:', e);
+    }
+  },
+
   initStore: async () => {
     try {
       const creds = await loadCredentials();
@@ -74,6 +91,14 @@ export const useAppStore = create<AppState>((set) => ({
       const savedShopName = await SecureStore.getItemAsync('shop_name');
       if (savedShopName) {
         set({ shopName: savedShopName });
+      }
+
+      const savedRetention = await SecureStore.getItemAsync('tmp_retention_days');
+      if (savedRetention) {
+        const parsed = parseInt(savedRetention, 10);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 30) {
+          set({ tmpRetentionDays: parsed });
+        }
       }
     } catch (e) {
       console.error('Failed to load store credentials, theme, or shop name:', e);

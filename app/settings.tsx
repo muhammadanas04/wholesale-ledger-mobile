@@ -54,12 +54,40 @@ export default function SettingsScreen() {
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
 
-  const { syncConfig, syncStatus, setSyncConfig, themeSetting, setThemeSetting, setLastSyncTime, shopName, setShopName } = useAppStore();
+  const { syncConfig, syncStatus, setSyncConfig, themeSetting, setThemeSetting, setLastSyncTime, shopName, setShopName, tmpRetentionDays, setTmpRetentionDays } = useAppStore();
   const [syncKey, setSyncKey] = useState('');
   const [shopNameInput, setShopNameInput] = useState('');
+  const [retentionInput, setRetentionInput] = useState(String(tmpRetentionDays));
   const [errorText, setErrorText] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRetentionInput(String(tmpRetentionDays));
+  }, [tmpRetentionDays]);
+
+  const handleRetentionChange = (val: string) => {
+    const clean = val.replace(/[^0-9]/g, '');
+    setRetentionInput(clean);
+    const parsed = parseInt(clean, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 30) {
+      setTmpRetentionDays(parsed);
+    }
+  };
+
+  const handleRetentionBlur = () => {
+    const parsed = parseInt(retentionInput, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      setRetentionInput('1');
+      setTmpRetentionDays(1);
+    } else if (parsed > 30) {
+      setRetentionInput('30');
+      setTmpRetentionDays(30);
+    } else {
+      setRetentionInput(String(parsed));
+      setTmpRetentionDays(parsed);
+    }
+  };
 
   useEffect(() => {
     setShopNameInput(shopName);
@@ -318,6 +346,37 @@ export default function SettingsScreen() {
           </View>
         </GlassView>
 
+        {/* Temporary Records Configuration */}
+        <GlassView style={styles.card}>
+          <Text style={[styles.cardLabel, { color: colors.tabIconDefault }]}>
+            Temporary Records
+          </Text>
+          <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 8 }]}>
+            Local Retention Period
+          </Text>
+          <Text style={[styles.cardDescription, { color: colors.tabIconDefault, marginBottom: 12 }]}>
+            Define how many days temporary records are kept on this device before being deleted.
+          </Text>
+
+          <View style={styles.retentionContainer}>
+            <TextInput
+              style={[
+                styles.retentionInput,
+                { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }
+              ]}
+              keyboardType="number-pad"
+              value={retentionInput}
+              onChangeText={handleRetentionChange}
+              onBlur={handleRetentionBlur}
+              maxLength={2}
+            />
+            <Text style={[styles.retentionLabel, { color: colors.text }]}>days</Text>
+          </View>
+          <Text style={[styles.retentionHelp, { color: colors.tabIconDefault }]}>
+            Records in the cloud and desktop are kept for 15 days regardless.
+          </Text>
+        </GlassView>
+
         {/* Status Indicators */}
         <GlassView style={styles.card}>
           <Text style={[styles.cardLabel, { color: colors.tabIconDefault }]}>
@@ -571,5 +630,30 @@ const styles = StyleSheet.create({
   wipeText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  retentionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  retentionInput: {
+    height: 48,
+    width: 80,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  retentionLabel: {
+    fontSize: 16,
+    marginLeft: 12,
+    fontWeight: '600',
+  },
+  retentionHelp: {
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
 });

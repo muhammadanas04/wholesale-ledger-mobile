@@ -92,7 +92,7 @@ export async function pullSync(database: Database): Promise<void> {
 
   // 1. Pull Core Business changes
   const coreData = await api.pull(since);
-  const coreTables = ['customers', 'products', 'stock_purchases', 'sales', 'sale_items', 'payments'];
+  const coreTables = ['customers', 'products', 'stock_purchases', 'sales', 'sale_items', 'payments', 'tmp_records'];
   const preparedCore: any[] = [];
 
   for (const table of coreTables) {
@@ -130,7 +130,7 @@ export async function pushSync(database: Database): Promise<void> {
   if (!store.syncConfig) return;
 
   // 1. Push Core Business changes
-  const coreTables = ['customers', 'products', 'stock_purchases', 'sales', 'sale_items', 'payments'];
+  const coreTables = ['customers', 'products', 'stock_purchases', 'sales', 'sale_items', 'payments', 'tmp_records'];
   const corePayload: any = {};
   const corePushedRecordsMap = new Map<string, Model[]>();
   const corePushTimes = new Map<string, string>(); // recordId -> updatedAt ISO string
@@ -262,6 +262,30 @@ export async function runSync(database: Database): Promise<void> {
     await pushSync(database);
     // 2. Pull remote changes next
     await pullSync(database);
+    
+    // --- Local tmp_records cleanup ---
+    try {
+      const days = store.tmpRetentionDays || 3;
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const cutoffStr = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
+
+      const expired = await database.collections
+        .get('tmp_records')
+        .query(Q.where('date', Q.lt(cutoffStr)))
+        .fetch();
+
+      if (expired.length > 0) {
+        await database.write(async () => {
+          await database.batch(
+            ...expired.map((r) => r.prepareDestroyPermanently())
+          );
+        });
+        console.log(`[Sync] Cleaned up ${expired.length} expired tmp_records`);
+      }
+    } catch (e) {
+      console.error('[Sync] tmp_records cleanup error:', e);
+    }
     
     store.setSyncStatus('idle');
   } catch (e) {

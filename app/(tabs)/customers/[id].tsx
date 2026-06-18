@@ -306,6 +306,14 @@ Discount:    -${formatCurrency(selectedDiscountsPaise)}
 Balance Due: ${formatCurrency(selectedBalanceDue)}`;
   }, [customer, formattedDate, selectedSalesStr, selectedPaymentsStr, selectedDiscountsPaise, selectedBalanceDue]);
 
+  const isAllSelected = useMemo(() => {
+    if (combinedTransactions.length === 0) return false;
+    return combinedTransactions.every((item) => {
+      if (item.type === 'sale') return selectedSaleIds.has(item.id);
+      return selectedPaymentIds.has(item.id);
+    });
+  }, [combinedTransactions, selectedSaleIds, selectedPaymentIds]);
+
   if (loading) {
     return (
       <ScreenBackground>
@@ -463,13 +471,7 @@ Balance Due: ${formatCurrency(selectedBalanceDue)}`;
     }
   };
 
-  const isAllSelected = useMemo(() => {
-    if (combinedTransactions.length === 0) return false;
-    return combinedTransactions.every((item) => {
-      if (item.type === 'sale') return selectedSaleIds.has(item.id);
-      return selectedPaymentIds.has(item.id);
-    });
-  }, [combinedTransactions, selectedSaleIds, selectedPaymentIds]);
+
 
   return (
     <ScreenBackground>

@@ -15,8 +15,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
+import AddTmpRecordModal from '../../components/AddTmpRecordModal';
 import { GlassView } from '../../components/GlassView';
 import { ScreenBackground } from '../../components/ScreenBackground';
+import TmpRecordsViewerModal from '../../components/TmpRecordsViewerModal';
 import { useColorScheme } from '../../components/useColorScheme';
 import Colors from '../../constants/Colors';
 import { database } from '../../db';
@@ -26,6 +28,7 @@ import Delivery from '../../db/models/Delivery';
 import Driver from '../../db/models/Driver';
 import Payment from '../../db/models/Payment';
 import Sale from '../../db/models/Sale';
+import TmpRecord from '../../db/models/TmpRecord';
 import { runSync } from '../../lib/sync';
 import { formatCurrency } from '../../lib/utils';
 import { useAppStore } from '../../store/app';
@@ -97,7 +100,7 @@ function ActivityRow({ item, isFirst, isLast }: { item: ActivityItem; isFirst: b
             </Text>
             <View style={[styles.dot, { backgroundColor: colors.border }]} />
             <Text style={[styles.activityNotes, { color: colors.tabIconDefault }]} numberOfLines={1}>
-              {item.notes || (isSale ? 'Sale Invoice' : 'Payment Recorded')}
+              {item.notes || (isSale ? 'Sale' : 'Payment')}
             </Text>
           </View>
         </View>
@@ -127,6 +130,8 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showViewerModal, setShowViewerModal] = useState(false);
   const { syncStatus, lastSyncTime, shopName } = useAppStore();
 
   // Queries
@@ -135,6 +140,9 @@ export default function DashboardScreen() {
   const deliveries = useQuery(useMemo(() => database.collections.get<Delivery>('deliveries').query(), []));
   const sales = useQuery(useMemo(() => database.collections.get<Sale>('sales').query(Q.sortBy('created_at', Q.desc), Q.take(10)), []));
   const payments = useQuery(useMemo(() => database.collections.get<Payment>('payments').query(Q.sortBy('created_at', Q.desc), Q.take(10)), []));
+  const tmpRecords = useQuery(useMemo(() => database.collections.get<TmpRecord>('tmp_records').query(Q.sortBy('created_at', Q.desc)), []));
+
+  const tmpRecordsCount = tmpRecords.length;
 
   // Compute stats
   const totalOutstandingBalance = useMemo(() => {
@@ -300,14 +308,14 @@ export default function DashboardScreen() {
 
           {/* Metrics Grid */}
           <View style={styles.metricsGrid}>
-            <View style={[styles.metricsRow, { marginRight: 5 }]}>
+            <View style={styles.metricsRow}>
               {/* Receivables Card */}
               <TouchableOpacity
                 onPress={() => router.push('/customers')}
                 style={styles.metricCardContainer}
                 activeOpacity={0.9}
               >
-                <GlassView style={styles.metricCard} borderRadius={20}>
+                <GlassView style={{ ...styles.metricCard, marginRight: 6 }} borderRadius={24}>
                   <View style={styles.metricHeader}>
                     <Text style={[styles.metricLabel, { color: colors.tabIconDefault }]}>
                       Receivables
@@ -316,7 +324,7 @@ export default function DashboardScreen() {
                       <SymbolView
                         name={{ ios: 'indianrupeesign.circle.fill', android: 'payments', web: 'payments' }}
                         tintColor={colors.danger}
-                        size={12}
+                        size={14}
                       />
                     </View>
                   </View>
@@ -339,7 +347,7 @@ export default function DashboardScreen() {
                 style={styles.metricCardContainer}
                 activeOpacity={0.9}
               >
-                <GlassView style={styles.metricCard} borderRadius={20}>
+                <GlassView style={styles.metricCard} borderRadius={24}>
                   <View style={styles.metricHeader}>
                     <Text style={[styles.metricLabel, { color: colors.tabIconDefault }]}>
                       Drivers
@@ -348,7 +356,7 @@ export default function DashboardScreen() {
                       <SymbolView
                         name={{ ios: 'person.2.fill', android: 'people', web: 'people' }}
                         tintColor={colors.accent}
-                        size={12}
+                        size={14}
                       />
                     </View>
                   </View>
@@ -362,44 +370,155 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Delivery Progress Banner */}
+            {/* Delivery Progress Card */}
             <TouchableOpacity
               onPress={() => router.push('/delivery')}
               activeOpacity={0.9}
             >
-              <GlassView style={styles.deliveryProgressBanner} borderRadius={20}>
-                <View style={styles.deliveryProgressLeft}>
-                  <View style={[styles.deliveryProgressIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(13, 148, 136, 0.15)' : 'rgba(204, 251, 241, 0.6)' }]}>
-                    <SymbolView
-                      name={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
-                      tintColor={colors.tint}
-                      size={18}
-                    />
-                  </View>
-                  <View style={styles.deliveryProgressTextCol}>
-                    <Text style={[styles.deliveryProgressTitle, { color: colors.text }]}>
+              <GlassView style={styles.deliveryProgressCard} borderRadius={24}>
+                <View style={styles.deliveryCardHeader}>
+                  <View style={styles.deliveryCardTitleRow}>
+                    <View style={[styles.deliveryProgressIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(13, 148, 136, 0.15)' : 'rgba(204, 251, 241, 0.6)' }]}>
+                      <SymbolView
+                        name={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
+                        tintColor={colors.tint}
+                        size={20}
+                      />
+                    </View>
+                    <Text style={[styles.deliveryCardTitle, { color: colors.text }]}>
                       Delivery Progress
                     </Text>
-                    <View style={styles.deliveryProgressMeta}>
-                      <Text style={[styles.deliveryProgressMetaText, { color: colors.tabIconDefault }]}>
-                        {deliveriesProgress.pending} Pending
-                      </Text>
-                      <View style={[styles.dot, { backgroundColor: colors.border }]} />
-                      <Text style={[styles.deliveryProgressMetaText, { color: colors.tabIconDefault }]}>
-                        {deliveriesProgress.inProgress} Active
-                      </Text>
-                      <View style={[styles.dot, { backgroundColor: colors.border }]} />
-                      <Text style={[styles.deliveryProgressMetaText, { color: colors.tabIconDefault }]}>
-                        {deliveriesProgress.completed} Done
-                      </Text>
+                  </View>
+                  <SymbolView
+                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                    tintColor={colors.tabIconDefault}
+                    size={20}
+                  />
+                </View>
+
+                {/* Delivery Stats Row */}
+                <View style={styles.deliveryStatsRow}>
+                  <View style={styles.deliveryStatItem}>
+                    <Text style={[styles.deliveryStatValue, { color: colors.warning }]}>
+                      {deliveriesProgress.pending}
+                    </Text>
+                    <Text style={[styles.deliveryStatLabel, { color: colors.tabIconDefault }]}>
+                      Pending
+                    </Text>
+                  </View>
+                  <View style={[styles.deliveryStatDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.deliveryStatItem}>
+                    <Text style={[styles.deliveryStatValue, { color: colors.accent }]}>
+                      {deliveriesProgress.inProgress}
+                    </Text>
+                    <Text style={[styles.deliveryStatLabel, { color: colors.tabIconDefault }]}>
+                      Active
+                    </Text>
+                  </View>
+                  <View style={[styles.deliveryStatDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.deliveryStatItem}>
+                    <Text style={[styles.deliveryStatValue, { color: colors.success }]}>
+                      {deliveriesProgress.completed}
+                    </Text>
+                    <Text style={[styles.deliveryStatLabel, { color: colors.tabIconDefault }]}>
+                      Completed
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Progress Bar */}
+                {(() => {
+                  const total = deliveriesProgress.pending + deliveriesProgress.inProgress + deliveriesProgress.completed;
+                  const percent = total > 0 ? Math.round((deliveriesProgress.completed / total) * 100) : 0;
+                  return (
+                    <View style={styles.deliveryProgressWrapper}>
+                      <View style={styles.deliveryProgressBarHeader}>
+                        <Text style={[styles.deliveryProgressPercentText, { color: colors.tabIconDefault }]}>
+                          {percent}% overall completion
+                        </Text>
+                      </View>
+                      <View style={[styles.deliveryProgressBarTrack, { backgroundColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', borderColor: colors.border }]}>
+                        <View
+                          style={[
+                            styles.deliveryProgressBarFill,
+                            { backgroundColor: colors.tint, width: `${percent}%` }
+                          ]}
+                        />
+                      </View>
                     </View>
+                  );
+                })()}
+              </GlassView>
+            </TouchableOpacity>
+
+            {/* Add Record Card (New) */}
+            <TouchableOpacity
+              onPress={() => setShowAddModal(true)}
+              activeOpacity={0.9}
+              style={{ marginTop: 16 }}
+            >
+              <GlassView style={styles.addRecordCardLarge} borderRadius={24}>
+                <View style={styles.addRecordCardLeftLarge}>
+                  <View style={[styles.addRecordIconBoxLarge, { backgroundColor: colorScheme === 'dark' ? 'rgba(45, 212, 191, 0.15)' : 'rgba(204, 251, 241, 0.6)' }]}>
+                    <SymbolView
+                      name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
+                      tintColor={colors.tint}
+                      size={24}
+                    />
+                  </View>
+                  <View style={styles.addRecordTextCol}>
+                    <Text style={[styles.addRecordTitleLarge, { color: colors.text }]}>
+                      Add Temporary Record
+                    </Text>
+                    <Text style={[styles.addRecordSubtitleLarge, { color: colors.tabIconDefault }]}>
+                      Quick log sales, payments, or other expenses
+                    </Text>
                   </View>
                 </View>
                 <SymbolView
                   name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
                   tintColor={colors.tabIconDefault}
-                  size={16}
+                  size={20}
                 />
+              </GlassView>
+            </TouchableOpacity>
+
+            {/* Temporary Records Count Banner (New) */}
+            <TouchableOpacity
+              onPress={() => setShowViewerModal(true)}
+              activeOpacity={0.9}
+              style={{ marginTop: 16 }}
+            >
+              <GlassView style={styles.tmpRecordsStatusCard} borderRadius={24}>
+                <View style={styles.tmpRecordsLeft}>
+                  <View style={[styles.tmpRecordsIconBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(224, 242, 254, 0.6)' }]}>
+                    <SymbolView
+                      name={{ ios: 'clock.badge.fill', android: 'schedule', web: 'schedule' }}
+                      tintColor={colors.accent}
+                      size={22}
+                    />
+                  </View>
+                  <View style={styles.tmpRecordsTextCol}>
+                    <Text style={[styles.tmpRecordsTitle, { color: colors.text }]}>
+                      Active Temp Records
+                    </Text>
+                    <Text style={[styles.tmpRecordsSub, { color: colors.tabIconDefault }]}>
+                      Tap to view or delete temporary logs
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.tmpRecordsRight}>
+                  <View style={[styles.tmpRecordsBadge, { backgroundColor: tmpRecordsCount > 0 ? colors.accent : (colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)') }]}>
+                    <Text style={[styles.tmpRecordsBadgeText, { color: tmpRecordsCount > 0 ? '#FFFFFF' : colors.tabIconDefault }]}>
+                      {tmpRecordsCount}
+                    </Text>
+                  </View>
+                  <SymbolView
+                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                    tintColor={colors.tabIconDefault}
+                    size={20}
+                  />
+                </View>
               </GlassView>
             </TouchableOpacity>
           </View>
@@ -442,6 +561,17 @@ export default function DashboardScreen() {
             )}
           </GlassView>
         </ScrollView>
+
+        <AddTmpRecordModal
+          visible={showAddModal}
+          onClose={() => setShowAddModal(false)}
+        />
+
+        <TmpRecordsViewerModal
+          visible={showViewerModal}
+          onClose={() => setShowViewerModal(false)}
+          records={tmpRecords}
+        />
       </View>
     </ScreenBackground>
   );
@@ -460,20 +590,20 @@ const styles = StyleSheet.create({
     paddingBottom: 110, // clear floating dock
   },
   welcomeCard: {
-    padding: 16,
+    padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
   welcomeTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '800',
   },
   welcomeSub: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    marginTop: 3,
+    marginTop: 4,
   },
   badgeContainer: {
     flexDirection: 'row',
@@ -500,8 +630,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metricCard: {
-    padding: 16,
-    height: 114,
+    padding: 20,
+    height: 136,
     justifyContent: 'space-between',
   },
   metricHeader: {
@@ -510,65 +640,188 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   metricIconBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metricValueLarge: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
   metricValueText: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '800',
   },
   metricSubtext: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: '600',
   },
-  deliveryProgressBanner: {
+  deliveryProgressCard: {
+    padding: 20,
+    marginTop: 16,
+  },
+  deliveryCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    marginBottom: 16,
   },
-  deliveryProgressLeft: {
+  deliveryCardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   deliveryProgressIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  deliveryProgressTextCol: {
+  deliveryCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginLeft: 12,
+  },
+  deliveryStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  deliveryStatItem: {
     flex: 1,
+    alignItems: 'center',
   },
-  deliveryProgressTitle: {
-    fontSize: 13,
+  deliveryStatValue: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  deliveryStatLabel: {
+    fontSize: 11,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
-  deliveryProgressMeta: {
+  deliveryStatDivider: {
+    width: 1,
+    height: 24,
+  },
+  deliveryProgressWrapper: {
+    marginTop: 4,
+  },
+  deliveryProgressBarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  deliveryProgressPercentText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  deliveryProgressBarTrack: {
+    height: 8,
+    width: '100%',
+    borderRadius: 4,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  deliveryProgressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  addRecordCardLarge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+  },
+  addRecordCardLeftLarge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    flex: 1,
+    marginRight: 8,
   },
-  deliveryProgressMetaText: {
-    fontSize: 10,
+  addRecordIconBoxLarge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  addRecordTextCol: {
+    flex: 1,
+  },
+  addRecordTitleLarge: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  addRecordSubtitleLarge: {
+    fontSize: 11,
     fontWeight: '500',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  tmpRecordsStatusCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+  },
+  tmpRecordsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  tmpRecordsIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  tmpRecordsTextCol: {
+    flex: 1,
+  },
+  tmpRecordsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  tmpRecordsSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  tmpRecordsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tmpRecordsBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 10,
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tmpRecordsBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   sectionHeader: {
     marginBottom: 12,
@@ -584,6 +837,8 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     paddingVertical: 8,
+    paddingHorizontal: 8,
+
   },
   activityRow: {
     flexDirection: 'row',

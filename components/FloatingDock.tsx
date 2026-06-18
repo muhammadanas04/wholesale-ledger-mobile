@@ -4,6 +4,7 @@ import { SymbolView } from 'expo-symbols';
 import { GlassView } from './GlassView';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAppStore } from '@/store/app';
 
 export interface BottomTabBarProps {
   state: any;
@@ -14,6 +15,7 @@ export interface BottomTabBarProps {
 export function FloatingDock({ state, descriptors, navigation }: BottomTabBarProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
+  const { tabBarHidden } = useAppStore();
 
   // Hide tab bar when nested stack screens are active (e.g. details/new screens)
   const activeRoute = state.routes[state.index];
@@ -32,7 +34,7 @@ export function FloatingDock({ state, descriptors, navigation }: BottomTabBarPro
     }
   }
 
-  if (shouldHideTabBar) {
+  if (shouldHideTabBar || tabBarHidden) {
     return null;
   }
 

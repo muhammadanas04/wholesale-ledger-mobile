@@ -1,6 +1,6 @@
 # Admin App — Progress Log
 
-## Status: SESSIONS 18-20 COMPLETE (Referrer Back Navigation, Custom Date Pickers, Customer Filters Implemented)
+## Status: SESSIONS 18-21 COMPLETE (Temporary Records Feature Across Mobile, Desktop, and Cloud Worker Implemented)
 
 ---
 
@@ -329,6 +329,27 @@ After every AI coding session, paste a summary of what was built, what changed, 
   - Overhauled the text generator for custom bills so that selecting multiple sales/payments formats as a sum formula: `+(sale#1 + sale#2) = total#` and `-(payment#1 + payment#2) = total#` instead of directly outputting total sums.
 - **Verified Type Safety & Bundling**:
   - Checked and verified zero compiler errors (`npx tsc --noEmit` succeeds).
+
+**Current working state:**
+- The project is fully completed, verified, and compiling cleanly.
+
+---
+
+### Session 21 — June 17, 2026
+**What we built / fixed:**
+- **Temporary Records Feature ("Tmp Records")**:
+  - Implemented the single-table `tmp_records` schema design across mobile, worker, and desktop.
+  - Bumped WatermelonDB schema version to 2 and Electron SQLite version to 10.
+  - Integrated push/pull sync loops for `tmp_records` on the Cloudflare Worker, Mobile App, and Desktop App.
+  - Coded automatic database retention cleanups (local mobile entries after user-defined *N* days, and cloud/desktop entries after 15 days).
+  - Designed dashboard entry cards and dynamic count badges in the mobile index.
+  - Created the autocomplete-supported, rate-calculating `AddTmpRecordModal` form.
+  - Built clipboard copy messages, pre-filled SMS sharing links, and confirm-to-delete flows in the scrollable `TmpRecordsViewerModal`.
+  - Added Local Retention days card configuration input block in `settings.tsx`.
+  - Built filters (type dropdown and date ranges), sidebar links, Alt+M keyboard hotkeys, and paginated table layouts in `TmpRecords.jsx` on Desktop.
+- **Verified Type Safety & Build Compilation**:
+  - Confirmed clean compiler check `pnpm exec tsc --noEmit` on Mobile.
+  - Verified successful React production bundle build `npm run build` on Desktop.
 
 **Current working state:**
 - The project is fully completed, verified, and compiling cleanly.
