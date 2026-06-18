@@ -35,9 +35,24 @@ import { useAppStore } from '../../../store/app';
 // Sub-component to render individual sale item rows
 function SaleItemRow({ item }: { item: SaleItem }) {
   const product = useRelation(item.product);
-  const lineTotal = item.totalPrice || item.qty * item.unitPrice;
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
+
+  const isWeightBased = !!(item.weight && item.weight > 0);
+
+  const lineTotal = useMemo(() => {
+    if (isWeightBased) {
+      return item.totalPrice || (item.weight! * item.unitPrice);
+    }
+    return item.totalPrice || (item.qty * item.unitPrice);
+  }, [item.totalPrice, item.qty, item.unitPrice, item.weight, isWeightBased]);
+
+  const rate = useMemo(() => {
+    if (isWeightBased) {
+      return item.totalPrice ? (item.totalPrice / item.weight!) : item.unitPrice;
+    }
+    return item.unitPrice;
+  }, [item.totalPrice, item.unitPrice, item.weight, isWeightBased]);
 
   return (
     <View style={[styles.itemRow, { borderBottomColor: colors.border }]}>
@@ -46,7 +61,11 @@ function SaleItemRow({ item }: { item: SaleItem }) {
           {product ? product.name : 'Loading product...'}
         </Text>
         <Text style={[styles.itemRowMeta, { color: colors.tabIconDefault }]}>
-          {item.qty} {product ? product.unit : 'pcs'} x {formatCurrency(item.unitPrice)}
+          {isWeightBased ? (
+            `${item.weight} kg x ${formatCurrency(rate)}/kg`
+          ) : (
+            `${item.qty} ${product ? product.unit : 'pcs'} x ${formatCurrency(rate)}`
+          )}
         </Text>
       </View>
       <Text style={[styles.itemRowTotal, { color: colors.text }]}>
