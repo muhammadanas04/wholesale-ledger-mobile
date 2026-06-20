@@ -208,6 +208,8 @@ export default function NewDeliveryScreen() {
             delItem.stockAmount = stop.stockAmount.trim();
             delItem.status = 'pending';
             delItem.customerId = stop.selectedCustomer?.id || undefined;
+            delItem.customerName = stop.selectedCustomer?.name || undefined;
+            delItem.customerPhone = stop.selectedCustomer?.phone || undefined;
             delItem.createdAt = timestamp;
             delItem.updatedAt = timestamp;
             delItem.synced = 0;

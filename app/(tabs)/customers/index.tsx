@@ -210,26 +210,24 @@ export default function CustomerListScreen() {
           }
         />
 
-        {/* Floating Action Button */}
-        <Link href="/customers/new" asChild>
-          <TouchableOpacity
-            style={[
-              styles.fab,
-              { 
-                backgroundColor: colors.tint, 
-                shadowColor: colors.tint,
-                bottom: Platform.OS === 'ios' ? insets.bottom + 110 : 110 
-              }
-            ]}
-            activeOpacity={0.8}
-          >
-            <SymbolView
-              name={{ ios: 'plus', android: 'add', web: 'add' }}
-              tintColor="#FFFFFF"
-              size={22}
-            />
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity
+          onPress={() => router.push('/customers/new')}
+          style={[
+            styles.fab,
+            { 
+              backgroundColor: colors.tint, 
+              shadowColor: colors.tint,
+              bottom: Platform.OS === 'ios' ? insets.bottom + 110 : 110 
+            }
+          ]}
+          activeOpacity={0.8}
+        >
+          <SymbolView
+            name={{ ios: 'plus', android: 'add', web: 'add' }}
+            tintColor="#FFFFFF"
+            size={22}
+          />
+        </TouchableOpacity>
       </View>
     </ScreenBackground>
   );

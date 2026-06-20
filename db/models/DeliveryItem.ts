@@ -17,6 +17,11 @@ export default class DeliveryItem extends Model {
   @text('status') status!: string; // pending, done
   @text('customer_id') customerId?: string;
   @text('notes') notes?: string;
+  @field('qty') qty?: number;
+  @field('weight') weight?: number;
+  @field('total_price') totalPrice?: number;
+  @text('customer_name') customerName?: string;
+  @text('customer_phone') customerPhone?: string;
   @text('created_at') createdAt?: string;
   @text('updated_at') updatedAt?: string;
   @field('synced') synced!: number;

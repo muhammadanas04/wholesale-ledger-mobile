@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 
-import { schemaMigrations, createTable } from '@nozbe/watermelondb/Schema/migrations';
+import { schemaMigrations, createTable, addColumns } from '@nozbe/watermelondb/Schema/migrations';
 
 import schema from './schema';
 import Customer from './models/Customer';
@@ -39,6 +39,21 @@ const migrations = schemaMigrations({
             { name: 'created_at', type: 'string' },
             { name: 'updated_at', type: 'string' },
             { name: 'synced', type: 'number' },
+          ],
+        }),
+      ],
+    },
+    {
+      toVersion: 3,
+      steps: [
+        addColumns({
+          table: 'delivery_items',
+          columns: [
+            { name: 'qty', type: 'number', isOptional: true },
+            { name: 'weight', type: 'number', isOptional: true },
+            { name: 'total_price', type: 'number', isOptional: true },
+            { name: 'customer_name', type: 'string', isOptional: true },
+            { name: 'customer_phone', type: 'string', isOptional: true },
           ],
         }),
       ],

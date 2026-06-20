@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { database } from '../../../db';
 import Customer from '../../../db/models/Customer';
-import { sanitizePhone } from '../../../lib/utils';
+import { sanitizePhone, generateNumericId } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
 import { useColorScheme } from '../../../components/useColorScheme';
 import Colors from '../../../constants/Colors';
@@ -101,7 +101,7 @@ export default function NewCustomerScreen() {
             customer.synced = 0;
           });
         } else {
-          const customerId = Crypto.randomUUID();
+          const customerId = generateNumericId();
           await database.collections.get<Customer>('customers').create((customer) => {
             customer._raw.id = customerId;
             customer.name = name.trim();

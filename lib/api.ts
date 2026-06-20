@@ -50,7 +50,7 @@ export function decodeSyncKey(base64: string): { workerUrl: string; syncSecret: 
   if (!workerUrl || !syncSecret) {
     throw new Error('Sync Key must be in URL|SECRET format');
   }
-  
+
   return { workerUrl: workerUrl.trim(), syncSecret: syncSecret.trim() };
 }
 
@@ -62,14 +62,19 @@ export async function saveCredentials(workerUrl: string, syncSecret: string): Pr
   await SecureStore.setItemAsync('sync_secret', syncSecret);
 }
 
+export const DEFAULT_WORKER_URL = 'https://wholesale-sync.niranjanskr06.workers.dev';
+export const DEFAULT_SYNC_SECRET = '2156f797-86bf-439e-b3a3-963d01755d4e';
+
 /**
  * Loads secure credentials from the device key storage.
  */
 export async function loadCredentials(): Promise<{ workerUrl: string; syncSecret: string } | null> {
   const workerUrl = await SecureStore.getItemAsync('sync_url');
   const syncSecret = await SecureStore.getItemAsync('sync_secret');
-  if (!workerUrl || !syncSecret) return null;
-  return { workerUrl, syncSecret };
+  return {
+    workerUrl: workerUrl || DEFAULT_WORKER_URL,
+    syncSecret: syncSecret || DEFAULT_SYNC_SECRET,
+  };
 }
 
 /**

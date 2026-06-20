@@ -27,7 +27,7 @@ import Product from '../../../db/models/Product';
 import Sale from '../../../db/models/Sale';
 import SaleItem from '../../../db/models/SaleItem';
 import { useQuery } from '../../../db/hooks';
-import { formatCurrency } from '../../../lib/utils';
+import { formatCurrency, generateNumericId } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
 import { useColorScheme } from '../../../components/useColorScheme';
 import Colors from '../../../constants/Colors';
@@ -83,11 +83,7 @@ export default function NewSaleScreen() {
   }, [customerId]);
 
   const handleNavigationBack = () => {
-    if (referrer === 'customer-details' && selectedCustomer) {
-      router.push(`/customers/${selectedCustomer.id}?referrer=ledger`);
-    } else {
-      router.back();
-    }
+    router.back();
   };
 
   useEffect(() => {
@@ -285,7 +281,7 @@ export default function NewSaleScreen() {
 
     setSaving(true);
     try {
-      const saleId = Crypto.randomUUID();
+      const saleId = generateNumericId();
       const timestamp = new Date().toISOString();
 
       await database.write(async () => {
@@ -334,7 +330,7 @@ export default function NewSaleScreen() {
           }
 
           await database.collections.get<SaleItem>('sale_items').create((saleItem) => {
-            saleItem._raw.id = Crypto.randomUUID();
+            saleItem._raw.id = generateNumericId();
             saleItem.saleId = saleId;
             saleItem.productId = item.product.id;
             saleItem.qty = qty;

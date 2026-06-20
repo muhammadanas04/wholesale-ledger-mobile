@@ -19,6 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { Q } from '@nozbe/watermelondb';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { database } from '../../../db';
 import Driver from '../../../db/models/Driver';
@@ -286,20 +287,26 @@ export default function DriversScreen() {
         <TouchableOpacity
           onPress={() => setAddModalVisible(true)}
           style={[
-            styles.fab,
+            styles.fabContainer,
             { 
-              backgroundColor: colors.tint, 
-              shadowColor: colors.tint,
-              bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80 
+              bottom: Platform.OS === 'ios' ? insets.bottom + 110 : 110 
             }
           ]}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            tintColor="#FFFFFF"
-            size={22}
-          />
+          <LinearGradient
+            colors={colorScheme === 'dark' ? ['#2DD4BF', '#0D9488'] : ['#14B8A6', '#0D9488']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabGradient}
+          >
+            <SymbolView
+              name={{ ios: 'person.badge.plus.fill', android: 'person_add', web: 'person_add' }}
+              tintColor="#FFFFFF"
+              size={18}
+            />
+            <Text style={styles.fabText}>Add Driver</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* ----------------- REGISTER DRIVER MODAL ----------------- */}
@@ -519,6 +526,35 @@ const styles = StyleSheet.create({
     elevation: 6,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fabContainer: {
+    position: 'absolute',
+    right: 20,
+    height: 54,
+    width: 140,
+    borderRadius: 27,
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 99,
+    overflow: 'hidden',
+  },
+  fabGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    width: '100%',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  fabText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   modalOverlay: {
     flex: 1,

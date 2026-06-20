@@ -106,12 +106,10 @@ export default function CustomerDetailScreen() {
   const { shopName } = useAppStore();
 
   const handleBack = () => {
-    if (referrer === 'ledger') {
-      router.push('/ledger');
-    } else if (referrer === 'dashboard') {
-      router.push('/');
-    } else {
+    if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace('/customers');
     }
   };
 

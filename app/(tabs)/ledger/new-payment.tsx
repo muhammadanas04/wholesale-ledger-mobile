@@ -25,7 +25,7 @@ import { database } from '../../../db';
 import Customer from '../../../db/models/Customer';
 import Payment from '../../../db/models/Payment';
 import { useQuery } from '../../../db/hooks';
-import { formatCurrency } from '../../../lib/utils';
+import { formatCurrency, generateNumericId } from '../../../lib/utils';
 import { runSync } from '../../../lib/sync';
 import { useColorScheme } from '../../../components/useColorScheme';
 import Colors from '../../../constants/Colors';
@@ -68,11 +68,7 @@ export default function RecordPaymentScreen() {
   }, [customerId]);
 
   const handleNavigationBack = () => {
-    if (referrer === 'customer-details' && selectedCustomer) {
-      router.push(`/customers/${selectedCustomer.id}?referrer=ledger`);
-    } else {
-      router.back();
-    }
+    router.back();
   };
 
   useEffect(() => {
@@ -177,7 +173,7 @@ export default function RecordPaymentScreen() {
 
     setSaving(true);
     try {
-      const paymentId = Crypto.randomUUID();
+      const paymentId = generateNumericId();
       const timestamp = new Date().toISOString();
 
       await database.write(async () => {

@@ -289,7 +289,7 @@ export async function runSync(database: Database): Promise<void> {
     
     store.setSyncStatus('idle');
   } catch (e) {
-    console.error('Offline Sync Loop failed:', e);
+    console.log('Offline Sync Loop failed (server unreachable):', e);
     store.setSyncStatus('error');
     throw e;
   } finally {

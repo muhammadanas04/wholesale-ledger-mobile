@@ -5,7 +5,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // This disables WatermelonDB's native automatic @date tracking (which requires numbers).
 // Consequently, CRUD and sync operations must manually update and parse these values as ISO strings.
 export default appSchema({
-  version: 2,
+  version: 3,
   tables: [
     tableSchema({
       name: 'customers',
@@ -124,6 +124,11 @@ export default appSchema({
         { name: 'status', type: 'string' }, // pending, done
         { name: 'customer_id', type: 'string', isOptional: true, isIndexed: true },
         { name: 'notes', type: 'string', isOptional: true },
+        { name: 'qty', type: 'number', isOptional: true },
+        { name: 'weight', type: 'number', isOptional: true },
+        { name: 'total_price', type: 'number', isOptional: true },
+        { name: 'customer_name', type: 'string', isOptional: true },
+        { name: 'customer_phone', type: 'string', isOptional: true },
         { name: 'created_at', type: 'string', isOptional: true },
         { name: 'updated_at', type: 'string', isOptional: true },
         { name: 'synced', type: 'number' },

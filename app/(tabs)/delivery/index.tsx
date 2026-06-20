@@ -9,12 +9,13 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';
 import Toast from 'react-native-toast-message';
 import { Q } from '@nozbe/watermelondb';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 import { database } from '../../../db';
 import Delivery from '../../../db/models/Delivery';
@@ -271,25 +272,24 @@ export default function DeliveryDashboardScreen() {
         </View>
 
         {/* Floating Action Button */}
-        <Link href="/delivery/new-delivery" asChild>
-          <TouchableOpacity
-            style={[
-              styles.fab,
-              { 
-                backgroundColor: colors.tint, 
-                shadowColor: colors.tint,
-                bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80 
-              }
-            ]}
-            activeOpacity={0.8}
-          >
-            <SymbolView
-              name={{ ios: 'plus', android: 'add', web: 'add' }}
-              tintColor="#FFFFFF"
-              size={22}
-            />
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity
+          onPress={() => router.push('/delivery/new-delivery')}
+          style={[
+            styles.fab,
+            { 
+              backgroundColor: colors.tint,
+              shadowColor: colors.tint,
+              bottom: Platform.OS === 'ios' ? insets.bottom + 110 : 110 
+            }
+          ]}
+          activeOpacity={0.8}
+        >
+          <SymbolView
+            name={{ ios: 'plus', android: 'add', web: 'add' }}
+            tintColor="#FFFFFF"
+            size={22}
+          />
+        </TouchableOpacity>
       </View>
     </ScreenBackground>
   );
@@ -418,14 +418,15 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    height: 54,
-    width: 54,
-    borderRadius: 27,
+    height: 48,
+    width: 48,
+    borderRadius: 24,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 99,
   },
 });

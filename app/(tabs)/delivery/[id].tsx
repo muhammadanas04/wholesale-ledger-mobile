@@ -84,6 +84,26 @@ function StopRowItem({ item, index }: { item: DeliveryItem; index: number }) {
           </Text>
         </View>
 
+        {isDone && (item.qty !== undefined || item.weight !== undefined || item.totalPrice !== undefined) && (
+          <View style={[styles.stopMeta, { marginTop: 6 }]}>
+            <SymbolView
+              name={{ ios: 'info.circle.fill', android: 'info', web: 'info' }}
+              tintColor={colors.success}
+              size={12}
+            />
+            <Text style={[styles.stopMetaText, { color: colors.success, fontSize: 11, fontWeight: '600' }]}>
+              Delivered:{' '}
+              {[
+                item.qty !== undefined && item.qty > 0 ? `${item.qty} qty` : null,
+                item.weight !== undefined && item.weight > 0 ? `${item.weight} kg` : null,
+                item.totalPrice !== undefined && item.totalPrice > 0 ? formatCurrency(item.totalPrice) : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || 'No details logged'}
+            </Text>
+          </View>
+        )}
+
         {customer && (
           <View style={[styles.stopLink, { borderTopColor: colors.border }]}>
             <SymbolView

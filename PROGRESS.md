@@ -356,6 +356,33 @@ After every AI coding session, paste a summary of what was built, what changed, 
 
 ---
 
+### Session 22 — June 18, 2026
+**What we built / fixed:**
+- **Driver App Location Tracking**:
+  - Installed `expo-task-manager` to register background tasks in the driver app.
+  - Implemented background location tracking routines in `lib/location.ts` that sequentially request foreground and background permissions, reporting coordinates to the Cloudflare Worker via `api.reportLocation(lat, lng)` every 15 seconds.
+  - Defined the global task `background-location-task` in `app/_layout.tsx` to handle background OS coordinates updates.
+  - Added a 2-second polling check for permissions/services when `isLoggedIn` is true, displaying a full-screen blocking overlay asking the driver to enable location if services are disabled or permissions are denied.
+  - Automatically started location tracking on app launch/login and stopped updates on logout.
+- **Driver App Edit Modal Double-Tap Prevention**:
+  - Disabled the "Save Changes" button and displayed an `ActivityIndicator` spinner in the order edit modal in `app/(tabs)/index.tsx` while `editMutation.isPending` is true.
+- **Admin App Leaflet + OpenStreetMap Map Integration**:
+  - Replaced the heavy, billing-reliant native Google/Apple Maps (`react-native-maps`) implementation in the admin app with a lightweight Leaflet + OpenStreetMap setup inside a `react-native-webview`.
+  - Created `components/maps/types.ts` for map-related TypeScript interfaces and constants.
+  - Created `components/maps/LeafletHtml.ts` containing the Leaflet map HTML template string.
+  - Created `components/maps/LeafletMap.tsx` as a `forwardRef` WebView container component.
+  - Replaced `app/(tabs)/delivery/map.tsx` to utilize `LeafletMap`, decreasing the polling interval from 30s to 15s to match the driver's update frequency, and centralizing staleness checks.
+
+**What changed:**
+- Removed `"react-native-maps"` and installed `"react-native-webview"` in `admin-app` dependencies.
+- Ran a clean prebuild (`npx expo prebuild --clean` on the admin app) to strip the Google Maps SDK native libraries and link WebView native modules successfully.
+- Verified that both the `driver-app` and `admin-app` compile successfully with zero TypeScript compilation warnings/errors under `pnpm exec tsc --noEmit`.
+
+**Current working state:**
+- The project builds, runs, and compiles cleanly with **zero TypeScript errors** across both apps.
+
+---
+
 ## Decisions Made
 
 | Decision | Reason |
