@@ -277,6 +277,8 @@ export default function TmpRecordsViewerModal({
       visible={visible}
       animationType="slide"
       onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <SafeAreaView style={[styles.modalSafeArea, { backgroundColor: colors.background }]}>
         {/* Header */}

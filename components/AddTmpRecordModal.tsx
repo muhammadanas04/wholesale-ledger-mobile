@@ -253,6 +253,8 @@ export default function AddTmpRecordModal({
       animationType="slide"
       transparent={true}
       onRequestClose={onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
