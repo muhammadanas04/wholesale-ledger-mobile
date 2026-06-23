@@ -156,4 +156,9 @@ export const api = {
   getDriverLocations: async (): Promise<any> => {
     return fetchFromWorker('/driver/locations', 'GET');
   },
+
+  getExpenses: async (driverId?: string): Promise<any> => {
+    const queryParams = driverId ? `?driverId=${encodeURIComponent(driverId)}` : '';
+    return fetchFromWorker(`/admin/expenses${queryParams}`, 'GET');
+  },
 };

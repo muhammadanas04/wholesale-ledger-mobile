@@ -214,11 +214,25 @@ export default function DeliveryDashboardScreen() {
               Live tracker
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/delivery/expenses')}
+            style={[styles.quickNavBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <SymbolView
+              name={{ ios: 'indianrupeesign.square.fill', android: 'receipt', web: 'receipt' }}
+              tintColor={colors.tint}
+              size={14}
+            />
+            <Text style={[styles.quickNavText, { color: colors.text }]}>
+              Expenses
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Tab Selection Bar */}
         <View style={[styles.tabBar, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-          {(['pending', 'in_progress', 'completed'] as const).map((status) => (
+          {(['pending', 'completed'] as const).map((status) => (
             <TouchableOpacity
               key={status}
               style={[
@@ -236,7 +250,7 @@ export default function DeliveryDashboardScreen() {
                   }
                 ]}
               >
-                {status === 'in_progress' ? 'In Progress' : status === 'completed' ? 'Completed' : 'Pending'}
+                {status === 'completed' ? 'Completed' : 'Pending'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -264,7 +278,7 @@ export default function DeliveryDashboardScreen() {
                   No deliveries created.
                 </Text>
                 <Text style={[styles.emptySub, { color: colors.tabIconDefault }]}>
-                  There are no deliveries listed under the &ldquo;{activeTab === 'in_progress' ? 'In Progress' : activeTab === 'completed' ? 'Completed' : 'Pending'}&rdquo; status tab.
+                  There are no deliveries listed under the &ldquo;{activeTab === 'completed' ? 'Completed' : 'Pending'}&rdquo; status tab.
                 </Text>
               </View>
             }

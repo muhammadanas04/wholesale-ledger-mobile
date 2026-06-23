@@ -37,6 +37,7 @@ interface StopItem {
   id: string;
   address: string;
   stockAmount: string;
+  qtyStr: string;
   selectedCustomer: Customer | null;
 }
 
@@ -103,12 +104,13 @@ export default function NewDeliveryScreen() {
       id: Crypto.randomUUID(),
       address: '',
       stockAmount: '',
+      qtyStr: '',
       selectedCustomer: null,
     };
     setStops((prev) => [...prev, newStop]);
   };
 
-  const handleUpdateStop = (id: string, field: 'address' | 'stockAmount', value: string) => {
+  const handleUpdateStop = (id: string, field: 'address' | 'stockAmount' | 'qtyStr', value: string) => {
     setStops((prev) =>
       prev.map((stop) => (stop.id === id ? { ...stop, [field]: value } : stop))
     );
@@ -206,6 +208,7 @@ export default function NewDeliveryScreen() {
             delItem.deliveryId = deliveryId;
             delItem.address = stop.address.trim();
             delItem.stockAmount = stop.stockAmount.trim();
+            delItem.qty = parseFloat(stop.qtyStr) || 0;
             delItem.status = 'pending';
             delItem.customerId = stop.selectedCustomer?.id || undefined;
             delItem.customerName = stop.selectedCustomer?.name || undefined;
@@ -378,18 +381,34 @@ export default function NewDeliveryScreen() {
                       />
                     </View>
 
-                    {/* Stock Description */}
-                    <View style={styles.stopInputGroup}>
-                      <Text style={[styles.stopInputLabel, { color: colors.tabIconDefault }]}>
-                        Stock Details *
-                      </Text>
-                      <TextInput
-                        style={[styles.stopInput, { backgroundColor: colors.surfaceSolid, color: colors.text, borderColor: colors.border }]}
-                        placeholder="E.g., 5 bags Rice, 1 tin Ghee"
-                        placeholderTextColor={colors.tabIconDefault}
-                        value={stop.stockAmount}
-                        onChangeText={(val) => handleUpdateStop(stop.id, 'stockAmount', val)}
-                      />
+                    {/* Stock Description & Qty */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                      <View style={{ flex: 2 }}>
+                        <Text style={[styles.stopInputLabel, { color: colors.tabIconDefault }]}>
+                          Stock Details *
+                        </Text>
+                        <TextInput
+                          style={[styles.stopInput, { backgroundColor: colors.surfaceSolid, color: colors.text, borderColor: colors.border }]}
+                          placeholder="E.g., 5 bags Rice"
+                          placeholderTextColor={colors.tabIconDefault}
+                          value={stop.stockAmount}
+                          onChangeText={(val) => handleUpdateStop(stop.id, 'stockAmount', val)}
+                        />
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.stopInputLabel, { color: colors.tabIconDefault }]}>
+                          Qty (Optional)
+                        </Text>
+                        <TextInput
+                          style={[styles.stopInput, { backgroundColor: colors.surfaceSolid, color: colors.text, borderColor: colors.border }]}
+                          placeholder="0"
+                          placeholderTextColor={colors.tabIconDefault}
+                          value={stop.qtyStr}
+                          onChangeText={(val) => handleUpdateStop(stop.id, 'qtyStr', val)}
+                          keyboardType="numeric"
+                        />
+                      </View>
                     </View>
 
                     {/* Client Association */}

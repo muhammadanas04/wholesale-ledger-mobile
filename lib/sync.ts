@@ -46,10 +46,13 @@ async function prepareUpsertForTable(
           local.prepareUpdate((record) => {
             const columns = Object.keys(remote).filter((k) => k !== 'id');
             columns.forEach((col) => {
-              const propName = toCamelCase(col);
+              let propName = toCamelCase(col);
               let val = remote[col];
               if (col.endsWith('_id') && val !== null && val !== undefined) {
                 val = String(val);
+              }
+              if (propName === 'quantity') {
+                propName = 'qty';
               }
               (record as any)[propName] = val;
             });
@@ -64,10 +67,13 @@ async function prepareUpsertForTable(
           record._raw.id = String(remote.id); // set custom D1 UUID string
           const columns = Object.keys(remote).filter((k) => k !== 'id');
           columns.forEach((col) => {
-            const propName = toCamelCase(col);
+            let propName = toCamelCase(col);
             let val = remote[col];
             if (col.endsWith('_id') && val !== null && val !== undefined) {
               val = String(val);
+            }
+            if (propName === 'quantity') {
+              propName = 'qty';
             }
             (record as any)[propName] = val;
           });
@@ -145,6 +151,11 @@ export async function pushSync(database: Database): Promise<void> {
         // Remove WatermelonDB metadata fields if they conflict (D1 schema doesn't have _status / _changed)
         delete (raw as any)._status;
         delete (raw as any)._changed;
+        
+        if ((raw as any).qty !== undefined) {
+          (raw as any).quantity = (raw as any).qty;
+        }
+        
         return raw;
       });
       corePushedRecordsMap.set(table, unsyncedRecords);
@@ -201,6 +212,11 @@ export async function pushSync(database: Database): Promise<void> {
         deliveryPushTimes.set(r.id, (raw as any).updated_at || '');
         delete (raw as any)._status;
         delete (raw as any)._changed;
+        
+        if ((raw as any).qty !== undefined) {
+          (raw as any).quantity = (raw as any).qty;
+        }
+        
         return raw;
       });
       deliveryPushedRecordsMap.set(table, unsyncedRecords);
