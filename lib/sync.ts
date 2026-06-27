@@ -183,7 +183,9 @@ export async function pushSync(database: Database): Promise<void> {
                 })
               );
             } else {
+            if (__DEV__) {
               console.log(`[Sync] Concurrency conflict detected on push for ${table} ${r.id}, skipping synced=1 update`);
+            }
             }
           } catch (err) {
             // Record was deleted locally during sync -> ignore
@@ -244,7 +246,9 @@ export async function pushSync(database: Database): Promise<void> {
                 })
               );
             } else {
+            if (__DEV__) {
               console.log(`[Sync] Concurrency conflict detected on push for ${table} ${r.id}, skipping synced=1 update`);
+            }
             }
           } catch (err) {
             // Record was deleted locally during sync -> ignore
@@ -297,15 +301,21 @@ export async function runSync(database: Database): Promise<void> {
             ...expired.map((r) => r.prepareDestroyPermanently())
           );
         });
-        console.log(`[Sync] Cleaned up ${expired.length} expired tmp_records`);
+        if (__DEV__) {
+          console.log(`[Sync] Cleaned up ${expired.length} expired tmp_records`);
+        }
       }
     } catch (e) {
-      console.error('[Sync] tmp_records cleanup error:', e);
+      if (__DEV__) {
+        console.error('[Sync] tmp_records cleanup error:', e);
+      }
     }
     
     store.setSyncStatus('idle');
   } catch (e) {
-    console.log('Offline Sync Loop failed (server unreachable):', e);
+    if (__DEV__) {
+      console.log('Offline Sync Loop failed (server unreachable):', e);
+    }
     store.setSyncStatus('error');
     throw e;
   } finally {

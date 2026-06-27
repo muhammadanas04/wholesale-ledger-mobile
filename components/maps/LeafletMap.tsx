@@ -33,6 +33,8 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>(
       }
     }, []);
 
+    const prevJsonRef = useRef<string | null>(null);
+
     // ── Push locations into WebView whenever they change ──
     useEffect(() => {
       if (!isMapReady.current) {
@@ -41,7 +43,10 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>(
         return;
       }
       const json = JSON.stringify(locations);
-      injectJS(`window.updateDrivers(${json})`);
+      if (json !== prevJsonRef.current) {
+        injectJS(`window.updateDrivers(${json})`);
+        prevJsonRef.current = json;
+      }
     }, [locations, injectJS]);
 
     // ── Expose imperative methods to parent ──
@@ -90,7 +95,7 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>(
       <View style={styles.container}>
         <WebView
           ref={webViewRef}
-          originWhitelist={['*']}
+          originWhitelist={['https://*', 'http://*', 'file://*', 'data:*']}
           source={{ html: leafletHtml }}
           style={styles.map}
           onMessage={handleMessage}
@@ -99,7 +104,13 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>(
           overScrollMode="never"
           domStorageEnabled
           javaScriptEnabled
-          onShouldStartLoadWithRequest={() => true}
+          onShouldStartLoadWithRequest={(request) => {
+            // Only allow local file loads or unpkg leaflet assets
+            return request.url.startsWith('file://') || 
+                   request.url.startsWith('data:') || 
+                   request.url.startsWith('https://unpkg.com') ||
+                   request.url.startsWith('about:blank');
+          }}
           androidLayerType="hardware"
         />
       </View>

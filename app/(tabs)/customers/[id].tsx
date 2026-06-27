@@ -2,6 +2,7 @@ import { Q } from '@nozbe/watermelondb';
 import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { FlashList } from '@shopify/flash-list';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,10 +34,8 @@ import { formatCurrency } from '../../../lib/utils';
 import { useAppStore } from '../../../store/app';
 
 // Sub-component to render individual sale item rows
-function SaleItemRow({ item }: { item: SaleItem }) {
+function SaleItemRow({ item, colors }: { item: SaleItem; colors: any }) {
   const product = useRelation(item.product);
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme];
 
   const isWeightBased = !!(item.weight && item.weight > 0);
 
@@ -76,11 +75,9 @@ function SaleItemRow({ item }: { item: SaleItem }) {
 }
 
 // Sub-component to render a list of sale items within the accordion drawer
-function SaleItemsList({ sale }: { sale: Sale }) {
+function SaleItemsList({ sale, colors }: { sale: Sale; colors: any }) {
   const itemsQuery = useMemo(() => sale.items, [sale]);
   const items = useQuery(itemsQuery);
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme];
 
   if (items.length === 0) {
     return (
@@ -93,7 +90,7 @@ function SaleItemsList({ sale }: { sale: Sale }) {
   return (
     <View style={[styles.itemsContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
       {items.map((item) => (
-        <SaleItemRow key={item.id} item={item} />
+        <SaleItemRow key={item.id} item={item} colors={colors} />
       ))}
     </View>
   );
@@ -519,8 +516,13 @@ Balance Due: ${formatCurrency(selectedBalanceDue)}`;
       />
       {/* Set padding top for safe area in custom stack headers */}
       <View style={styles.rootContainer}>
-        <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scrollView}>
-          {/* Sticky Profile Header Card */}
+        <FlashList
+          data={activeTab === 'transactions' ? combinedTransactions : []}
+          estimatedItemSize={100}
+          contentContainerStyle={styles.scrollContent}
+          ListHeaderComponent={
+            <>
+              {/* Sticky Profile Header Card */}
           <GlassView style={styles.profileCard}>
             <View style={styles.profileHeaderRow}>
               <View style={styles.profileTextCol}>
@@ -762,135 +764,7 @@ Balance Due: ${formatCurrency(selectedBalanceDue)}`;
                   onClose={() => setEndPickerOpen(false)}
                 />
 
-                {/* Combined List of Transactions */}
-                {combinedTransactions.length === 0 ? (
-                  <View style={styles.emptyPanel}>
-                    <SymbolView
-                      name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
-                      tintColor={colors.tabIconDefault}
-                      size={44}
-                    />
-                    <Text style={[styles.emptyPanelText, { color: colors.tabIconDefault }]}>
-                      No transactions match the selected filters.
-                    </Text>
-                  </View>
-                ) : (
-                  combinedTransactions.map((item) => {
-                    if (item.type === 'sale') {
-                      const sale = item.record as Sale;
-                      const isExpanded = expandedSaleId === sale.id;
-                      const isSelected = selectedSaleIds.has(sale.id);
-                      return (
-                        <GlassView
-                          key={`sale-${sale.id}`}
-                          style={styles.saleRowContainer}
-                          borderRadius={16}
-                        >
-                          <View style={styles.saleRowHeader}>
-                            {/* Checkbox selector */}
-                            <TouchableOpacity
-                              onPress={() => toggleSaleSelection(sale.id)}
-                              style={styles.checkboxContainer}
-                            >
-                              <SymbolView
-                                name={{
-                                  ios: isSelected ? 'checkmark.circle.fill' : 'circle',
-                                  android: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                                  web: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                                }}
-                                tintColor={isSelected ? colors.tint : colors.tabIconDefault}
-                                size={18}
-                              />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={styles.saleRowClickable}
-                              onPress={() => setExpandedSaleId(isExpanded ? null : sale.id)}
-                            >
-                              <View style={styles.saleDetailsCol}>
-                                <Text style={[styles.transactionTitle, { color: colors.text }]}>
-                                  Sale — {sale.date}
-                                </Text>
-                                {sale.notes && (
-                                  <Text
-                                    style={[styles.transactionNotes, { color: colors.tabIconDefault }]}
-                                    numberOfLines={1}
-                                  >
-                                    {sale.notes}
-                                  </Text>
-                                )}
-                              </View>
-                              <View style={styles.saleAmountRow}>
-                                <Text style={[styles.saleAmountValue, { color: colors.danger }]}>
-                                  +{formatCurrency(sale.totalAmount)}
-                                </Text>
-                                <SymbolView
-                                  name={{
-                                    ios: isExpanded ? 'chevron.up' : 'chevron.down',
-                                    android: isExpanded ? 'expand_less' : 'expand_more',
-                                    web: isExpanded ? 'expand_less' : 'expand_more',
-                                  }}
-                                  tintColor={colors.tabIconDefault}
-                                  size={14}
-                                  style={styles.arrowIcon}
-                                />
-                              </View>
-                            </TouchableOpacity>
-                          </View>
-                          {isExpanded ? <SaleItemsList sale={sale} /> : null}
-                        </GlassView>
-                      );
-                    } else {
-                      const payment = item.record as Payment;
-                      const isSelected = selectedPaymentIds.has(payment.id);
-                      return (
-                        <GlassView
-                          key={`payment-${payment.id}`}
-                          style={styles.paymentRowContainer}
-                          borderRadius={16}
-                        >
-                          <View style={styles.paymentCheckboxRow}>
-                            <TouchableOpacity
-                              onPress={() => togglePaymentSelection(payment.id)}
-                              style={styles.checkboxContainer}
-                            >
-                              <SymbolView
-                                name={{
-                                  ios: isSelected ? 'checkmark.circle.fill' : 'circle',
-                                  android: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                                  web: isSelected ? 'check_circle' : 'radio_button_unchecked',
-                                }}
-                                tintColor={isSelected ? colors.tint : colors.tabIconDefault}
-                                size={18}
-                              />
-                            </TouchableOpacity>
-
-                            <View style={styles.paymentDetailsRow}>
-                              <View style={styles.paymentDetailsLeft}>
-                                <Text style={[styles.transactionTitle, { color: colors.text }]}>
-                                  Payment — {payment.date}
-                                </Text>
-                                {payment.notes && (
-                                  <Text style={[styles.transactionNotes, { color: colors.tabIconDefault }]}>
-                                    {payment.notes}
-                                  </Text>
-                                )}
-                                {payment.discount > 0 && (
-                                  <Text style={[styles.discountTagText, { color: colors.success }]}>
-                                    Discount Applied: {formatCurrency(payment.discount)}
-                                  </Text>
-                                )}
-                              </View>
-                              <Text style={[styles.paymentAmountText, { color: colors.success }]}>
-                                -{formatCurrency(payment.amount)}
-                              </Text>
-                            </View>
-                          </View>
-                        </GlassView>
-                      );
-                    }
-                  })
-                )}
+                {/* End of Filters Wrapper */}
               </View>
             )}
 
@@ -952,7 +826,139 @@ Balance Due: ${formatCurrency(selectedBalanceDue)}`;
               </View>
             )}
           </View>
-        </ScrollView>
+            </>
+          }
+          ListEmptyComponent={
+            activeTab === 'transactions' ? (
+              <View style={styles.emptyPanel}>
+                <SymbolView
+                  name={{ ios: 'doc.plaintext', android: 'receipt', web: 'receipt' }}
+                  tintColor={colors.tabIconDefault}
+                  size={44}
+                />
+                <Text style={[styles.emptyPanelText, { color: colors.tabIconDefault }]}>
+                  No transactions match the selected filters.
+                </Text>
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) => {
+
+                    if (item.type === 'sale') {
+                      const sale = item.record as Sale;
+                      const isExpanded = expandedSaleId === sale.id;
+                      const isSelected = selectedSaleIds.has(sale.id);
+                      return (
+                        <GlassView
+                          key={`sale-${sale.id}`}
+                          style={styles.saleRowContainer}
+                          borderRadius={16}
+                        >
+                          <View style={styles.saleRowHeader}>
+                            {/* Checkbox selector */}
+                            <TouchableOpacity
+                              onPress={() => toggleSaleSelection(sale.id)}
+                              style={styles.checkboxContainer}
+                            >
+                              <SymbolView
+                                name={{
+                                  ios: isSelected ? 'checkmark.circle.fill' : 'circle',
+                                  android: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                  web: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                }}
+                                tintColor={isSelected ? colors.tint : colors.tabIconDefault}
+                                size={18}
+                              />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.saleRowClickable}
+                              onPress={() => setExpandedSaleId(isExpanded ? null : sale.id)}
+                            >
+                              <View style={styles.saleDetailsCol}>
+                                <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                                  Sale — {sale.date}
+                                </Text>
+                                {sale.notes && (
+                                  <Text
+                                    style={[styles.transactionNotes, { color: colors.tabIconDefault }]}
+                                    numberOfLines={1}
+                                  >
+                                    {sale.notes}
+                                  </Text>
+                                )}
+                              </View>
+                              <View style={styles.saleAmountRow}>
+                                <Text style={[styles.saleAmountValue, { color: colors.danger }]}>
+                                  +{formatCurrency(sale.totalAmount)}
+                                </Text>
+                                <SymbolView
+                                  name={{
+                                    ios: isExpanded ? 'chevron.up' : 'chevron.down',
+                                    android: isExpanded ? 'expand_less' : 'expand_more',
+                                    web: isExpanded ? 'expand_less' : 'expand_more',
+                                  }}
+                                  tintColor={colors.tabIconDefault}
+                                  size={14}
+                                  style={styles.arrowIcon}
+                                />
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                          {isExpanded ? <SaleItemsList sale={sale} colors={colors} /> : null}
+                        </GlassView>
+                      );
+                    } else {
+                      const payment = item.record as Payment;
+                      const isSelected = selectedPaymentIds.has(payment.id);
+                      return (
+                        <GlassView
+                          key={`payment-${payment.id}`}
+                          style={styles.paymentRowContainer}
+                          borderRadius={16}
+                        >
+                          <View style={styles.paymentCheckboxRow}>
+                            <TouchableOpacity
+                              onPress={() => togglePaymentSelection(payment.id)}
+                              style={styles.checkboxContainer}
+                            >
+                              <SymbolView
+                                name={{
+                                  ios: isSelected ? 'checkmark.circle.fill' : 'circle',
+                                  android: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                  web: isSelected ? 'check_circle' : 'radio_button_unchecked',
+                                }}
+                                tintColor={isSelected ? colors.tint : colors.tabIconDefault}
+                                size={18}
+                              />
+                            </TouchableOpacity>
+
+                            <View style={styles.paymentDetailsRow}>
+                              <View style={styles.paymentDetailsLeft}>
+                                <Text style={[styles.transactionTitle, { color: colors.text }]}>
+                                  Payment — {payment.date}
+                                </Text>
+                                {payment.notes && (
+                                  <Text style={[styles.transactionNotes, { color: colors.tabIconDefault }]}>
+                                    {payment.notes}
+                                  </Text>
+                                )}
+                                {payment.discount > 0 && (
+                                  <Text style={[styles.discountTagText, { color: colors.success }]}>
+                                    Discount Applied: {formatCurrency(payment.discount)}
+                                  </Text>
+                                )}
+                              </View>
+                              <Text style={[styles.paymentAmountText, { color: colors.success }]}>
+                                -{formatCurrency(payment.amount)}
+                              </Text>
+                            </View>
+                          </View>
+                        </GlassView>
+                      );
+                    }
+          }}
+        />
 
         {/* Sticky Bottom Actions Comfort Zone CTAs */}
         <GlassView

@@ -152,7 +152,8 @@ export default function DriversScreen() {
       }
 
       const driverId = Crypto.randomUUID();
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const randomInt = Crypto.getRandomBytes(4).reduce((acc, val) => (acc << 8) | val, 0) >>> 0;
+      const otpCode = (100000 + (randomInt % 900000)).toString();
       const timestamp = new Date().toISOString();
       const formattedName = driverName.trim() || 'Unnamed Driver';
 

@@ -169,6 +169,7 @@ export default function NewCustomerScreen() {
                 onChangeText={setName}
                 autoCapitalize="words"
                 autoCorrect={false}
+                maxLength={100}
               />
             </View>
 
@@ -206,6 +207,7 @@ export default function NewCustomerScreen() {
                 onChangeText={setAddress}
                 multiline
                 autoCapitalize="sentences"
+                maxLength={250}
               />
             </View>
           </GlassView>

@@ -559,6 +559,7 @@ export default function NewSaleScreen() {
                             placeholderTextColor={colors.tabIconDefault}
                             keyboardType="decimal-pad"
                             value={item.qtyStr}
+                            maxLength={10}
                             onChangeText={(val) => handleUpdateLineItem(item.id, 'qtyStr', val)}
                           />
                         </View>
@@ -574,6 +575,7 @@ export default function NewSaleScreen() {
                             placeholderTextColor={colors.tabIconDefault}
                             keyboardType="decimal-pad"
                             value={item.priceStr}
+                            maxLength={12}
                             onChangeText={(val) => handleUpdateLineItem(item.id, 'priceStr', val)}
                           />
                         </View>
@@ -588,6 +590,7 @@ export default function NewSaleScreen() {
                               placeholderTextColor={colors.tabIconDefault}
                               keyboardType="decimal-pad"
                               value={item.discountStr}
+                              maxLength={12}
                               onChangeText={(val) => handleUpdateLineItem(item.id, 'discountStr', val)}
                             />
                           </View>
@@ -602,6 +605,7 @@ export default function NewSaleScreen() {
                             placeholderTextColor={colors.tabIconDefault}
                             keyboardType="decimal-pad"
                             value={item.weightStr}
+                            maxLength={10}
                             onChangeText={(val) => handleUpdateLineItem(item.id, 'weightStr', val)}
                           />
                         </View>
@@ -634,6 +638,7 @@ export default function NewSaleScreen() {
               onChangeText={setNotes}
               multiline
               autoCapitalize="sentences"
+              maxLength={250}
             />
           </GlassView>
         </ScrollView>
@@ -774,31 +779,32 @@ export default function NewSaleScreen() {
                 </View>
               </View>
 
-              <ScrollView style={styles.modalList}>
-                {products.length === 0 ? (
+              <FlatList
+                style={styles.modalList}
+                data={products}
+                keyExtractor={(p) => p.id}
+                renderItem={({ item: p }) => (
+                  <TouchableOpacity
+                    onPress={() => handleAddLineItem(p)}
+                    style={[styles.modalListItem, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={styles.modalListLeft}>
+                      <Text style={[styles.modalItemName, { color: colors.text }]}>{p.name}</Text>
+                      <Text style={[styles.modalItemPhone, { color: colors.tabIconDefault }]}>Unit: {p.unit}</Text>
+                    </View>
+                    <Text style={[styles.modalItemBal, { color: colors.tabIconDefault }]}>
+                      Stock: {p.currentStock} {p.unit}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
                   <View style={styles.modalEmpty}>
                     <Text style={[styles.emptyProductsText, { color: colors.tabIconDefault }]}>
                       No products matched. Pull sync settings to reload products inventory database.
                     </Text>
                   </View>
-                ) : (
-                  products.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      onPress={() => handleAddLineItem(p)}
-                      style={[styles.modalListItem, { borderBottomColor: colors.border }]}
-                    >
-                      <View style={styles.modalListLeft}>
-                        <Text style={[styles.modalItemName, { color: colors.text }]}>{p.name}</Text>
-                        <Text style={[styles.modalItemPhone, { color: colors.tabIconDefault }]}>Unit: {p.unit}</Text>
-                      </View>
-                      <Text style={[styles.modalItemBal, { color: colors.tabIconDefault }]}>
-                        Stock: {p.currentStock} {p.unit}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
+                }
+              />
             </SafeAreaView>
           </ScreenBackground>
         </Modal>

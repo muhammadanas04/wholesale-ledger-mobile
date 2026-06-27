@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+
 /**
  * Formats a value in paise (integer) into Indian Rupees (INR) format.
  * Accounts for positive and negative values (e.g. negative balance means credit/overpaid).
@@ -32,9 +34,16 @@ export function sanitizePhone(phone: string): string {
  * Number.MAX_SAFE_INTEGER and SQLite/D1 INTEGER PRIMARY KEY columns.
  */
 export function generateNumericId(): string {
-  const min = 100000000000000;
-  const max = 900000000000000;
-  const num = Math.floor(Math.random() * (max - min + 1)) + min;
-  return String(num);
+  const bytes = Crypto.getRandomBytes(8);
+  let numStr = '';
+  for (let i = 0; i < bytes.length; i++) {
+    numStr += bytes[i].toString(10);
+  }
+  
+  // Ensure first digit is 1-9 to avoid leading zeros for integer primary keys
+  let firstDigit = parseInt(numStr[0], 10);
+  if (firstDigit === 0) firstDigit = 1;
+  
+  return `${firstDigit}${numStr.slice(1, 15)}`.padEnd(15, '0');
 }
 

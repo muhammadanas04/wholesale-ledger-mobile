@@ -28,10 +28,7 @@ import { GlassView } from '../../../components/GlassView';
 import { ScreenBackground } from '../../../components/ScreenBackground';
 
 // Extracted Row Item component
-function CustomerRow({ item }: { item: Customer }) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme];
-
+function CustomerRow({ item, colors, colorScheme }: { item: Customer; colors: any; colorScheme: any }) {
   return (
     <Link href={`/customers/${item.id}`} asChild>
       <Pressable>
@@ -184,7 +181,7 @@ export default function CustomerListScreen() {
         {/* Customers List */}
         <FlashList
           data={customers}
-          renderItem={({ item }) => <CustomerRow item={item} />}
+          renderItem={({ item }) => <CustomerRow item={item} colors={colors} colorScheme={colorScheme} />}
           keyExtractor={(item) => item.id}
           estimatedItemSize={76}
           contentContainerStyle={styles.listContent}
